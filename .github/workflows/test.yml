@@ -1,0 +1,29 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    # Run on every supported OS. Standboy touches platform-sensitive
+    # paths (~/.standboy, ~/.claude, ~/.cursor) and shells out to a
+    # bundled Node script via Cursor/Claude Code hooks — Windows
+    # cmd.exe semantics in particular are worth catching in CI before
+    # users hit them.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+      - run: npm ci
+      - run: npm test

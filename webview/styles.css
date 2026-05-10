@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --sb-c0: #332c50;
+  --sb-c1: #46878f;
+  --sb-c2: #94e344;
+  --sb-c3: #e2f3e4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/*
+ * VSCode injects `padding: 0 20px` on body by default — that leaves the
+ * panel background showing as side-strips around our content. Reset it
+ * so the console fills the entire panel edge-to-edge.
+ */
+body {
+  padding: 0;
+  background: var(--sb-c0);
+  color: var(--sb-c3);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/*
+ * Suppress EmulatorJS's built-in UI. Standboy provides its own chrome
+ * (D-pad, action buttons, palette, save/load via VSCode commands), so the
+ * EmulatorJS menubar, context menu, settings dialog, and cheat panel
+ * would only confuse users and duplicate functionality. The emulator
+ * canvas itself (.ejs_canvas / .ejs_canvas_parent) stays untouched.
+ */
+.ejs_menu_bar,
+.ejs_menu_bar_spacer,
+.ejs_menu_button,
+.ejs_menu_text,
+.ejs_context_menu,
+.ejs_context_menu_tab,
+.ejs_control_bar,
+.ejs_control_player_bar,
+.ejs_setting_menu,
+.ejs_settings_main_bar,
+.ejs_settings_parent,
+.ejs_cheat_parent,
+.ejs_message {
+  display: none !important;
+}
+
+/*
+ * Scrollbar styling. The default Chromium scrollbar in VSCode webviews is
+ * a chunky grey bar that breaks the calm dark surface — replace with a
+ * thin translucent one that matches the palette. Uses --sb-c3 (cream) at
+ * low opacity so it stays visible across every palette without picking
+ * up an explicit color of its own.
+ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(226, 243, 228, 0.12);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 150ms ease-out;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(226, 243, 228, 0.25);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+ * Countdown progress bar for the auto-hide announcement. App.tsx renders
+ * a fixed-height div at the top of the panel and applies this animation;
+ * the user sees a shrinking bar that signals the panel is about to
+ * collapse, so the focus shift isn't a surprise.
+ */
+@keyframes sb-countdown-shrink {
+  /* Explicit endpoints; relying on CSS's `to` resolution against an
+   * absolutely-positioned div without an intrinsic width is fragile. */
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
+}

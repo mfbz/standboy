@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+build/
+vendor/
+
+# Test
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/settings.json
+.vscode/.debug.env
+.idea/
+
+# Env
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# VS Code extension
+*.vsix
+
+# Lint / build caches
+.eslintcache
+
+# Temp / secrets
+*.tmp
+*.bak
+*.pem
+*.key
+*.p12
+credentials.json
+*.tsbuildinfo
+
+# Claude
+.claude/settings.local.json
+.claude.local/
+.superpowers/

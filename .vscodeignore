@@ -1,0 +1,46 @@
+# Source — bundled into dist/ via esbuild, doesn't need to ship.
+src/**
+webview/**
+scripts/**
+
+# Repo metadata + tooling — not user-facing.
+.vscode/**
+.github/**
+.claude/
+.superpowers/
+docs/**
+node_modules/**
+esbuild.mjs
+tsconfig.json
+tsconfig.webview.json
+vitest.config.ts
+eslint.config.mjs
+*.mjs
+*.ts
+*.tsx
+*.tsbuildinfo
+.prettierrc
+.prettierignore
+.gitignore
+.eslintcache
+package-lock.json
+**/*.map
+
+# Internal docs / brand reference. README and LICENSE ship.
+CLAUDE.md
+SPECS.md
+CHANGELOG.md
+design.html
+
+# Oversize source assets — the rendered PNGs ship.
+media/icon-1024.png
+media/icon.svg
+
+# EmulatorJS internal docs — we ship only the runtime data/cores it needs.
+vendor/emulatorjs/docs/**
+vendor/emulatorjs/index.html
+vendor/emulatorjs/CHANGES.md
+vendor/emulatorjs/CODE_OF_CONDUCT.md
+vendor/emulatorjs/CONTRIBUTING.md
+vendor/emulatorjs/README.md
+vendor/emulatorjs/package.json

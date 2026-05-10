@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # The .vsix is platform-agnostic (pure JS + wasm + assets, no native
+    # binaries), so a single ubuntu-latest build is all we need to ship.
+    # Cross-OS *test* coverage lives in test.yml.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Detect early — exits in seconds on non-release pushes without
+      # paying for `npm ci` and the full gate suite. Sets `tag` and
+      # `version` env vars for the rest of the steps when releasing.
+      - id: detect
+        name: Detect version bump
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing version $VERSION"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.detect.outputs.release == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - if: steps.detect.outputs.release == 'true'
+        run: npm ci
+
+      # Full gate suite. Defense-in-depth — PR CI already runs these,
+      # but the release path re-runs them on the exact commit being
+      # published in case main was force-pushed or a PR landed without
+      # a green CI run.
+      - if: steps.detect.outputs.release == 'true'
+        run: npm run typecheck
+      - if: steps.detect.outputs.release == 'true'
+        run: npm run lint
+      - if: steps.detect.outputs.release == 'true'
+        run: npm run format:check
+      - if: steps.detect.outputs.release == 'true'
+        run: npm test
+      - if: steps.detect.outputs.release == 'true'
+        run: npm run package
+
+      # ── Publish first, tag second. ───────────────────────────────────
+      # If the Marketplace publish fails (auth, network, validation,
+      # whatever), we want the workflow to fail BEFORE creating the
+      # tag so a fix-and-retry produces a clean release. With the
+      # opposite order, a transient publish failure leaves a tag
+      # pointing at unreleased code and the next run short-circuits
+      # at "Detect version bump" because the tag already exists.
+
+      - if: steps.detect.outputs.release == 'true'
+        name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish --packagePath standboy-*.vsix
+
+      - if: steps.detect.outputs.release == 'true'
+        name: Tag and push
+        env:
+          TAG: ${{ steps.detect.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - if: steps.detect.outputs.release == 'true'
+        name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        # Open VSX has occasional outages and is the secondary registry
+        # — tolerate failure here so the GitHub release still completes.
+        # The Marketplace publish (above) is the hard gate.
+        run: npx --yes ovsx publish standboy-*.vsix -p "$OVSX_PAT" || true
+
+      - if: steps.detect.outputs.release == 'true'
+        name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.detect.outputs.tag }}
+          VERSION: ${{ steps.detect.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --generate-notes \
+            --title "Standboy $VERSION" \
+            standboy-*.vsix

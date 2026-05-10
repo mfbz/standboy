@@ -1,0 +1,16 @@
+node_modules
+dist
+vendor
+# Generated rom-db JSON ships single-line for size; prettier would
+# expand it to ~3× the disk footprint with no readability win.
+data/rom-db/
+# Local brainstorm session content — not committed, not formatted.
+.superpowers/
+*.min.js
+package-lock.json
+*.tsbuildinfo
+*.vsix
+.changeset/
+docs/superpowers/plans/
+docs/superpowers/specs/
+design.html

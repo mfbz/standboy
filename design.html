@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Standboy — Brand Guidelines</title>
+<style>
+  :root {
+    --sb-purple: #332c50;
+    --sb-cream: #e2f3e4;
+    --sb-green: #94e344;
+    --sb-text: #1a1428;
+    --sb-text-muted: #6b6584;
+    --sb-page: #f7f5f0;
+    --sb-rule: #e5e0d6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--sb-page);
+    color: var(--sb-text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1080px; margin: 0 auto; padding: 80px 48px 120px; }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+    align-items: center;
+    padding-bottom: 96px;
+    border-bottom: 1px solid var(--sb-rule);
+    margin-bottom: 80px;
+  }
+  .hero-icon { width: 280px; height: 280px; }
+  .hero-text .eyebrow {
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--sb-text-muted);
+    margin-bottom: 16px;
+  }
+  .hero-text h1 {
+    font-size: 64px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-bottom: 20px;
+    color: var(--sb-purple);
+  }
+  .hero-text .tagline {
+    font-size: 22px;
+    color: var(--sb-text-muted);
+    max-width: 36ch;
+    line-height: 1.4;
+  }
+
+  section { margin-bottom: 96px; }
+
+  h2 {
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sb-text-muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  h3 {
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--sb-purple);
+    margin-bottom: 32px;
+    line-height: 1.15;
+  }
+  h4 { font-size: 16px; font-weight: 600; color: var(--sb-purple); margin-bottom: 8px; }
+  p { margin-bottom: 16px; max-width: 65ch; }
+  p:last-child { margin-bottom: 0; }
+  .lead { font-size: 19px; color: var(--sb-text); margin-bottom: 48px; max-width: 60ch; }
+
+  .logo-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .logo-cell {
+    background: white;
+    border: 1px solid var(--sb-rule);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .logo-cell.dark { background: var(--sb-purple); }
+  .logo-cell .label { font-size: 12px; color: var(--sb-text-muted); font-variant-numeric: tabular-nums; }
+  .logo-cell.dark .label { color: rgba(255,255,255,0.55); }
+
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .swatch { border-radius: 16px; overflow: hidden; border: 1px solid var(--sb-rule); }
+  .swatch-color { height: 180px; display: flex; align-items: flex-end; padding: 20px; }
+  .swatch-color span { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
+  .swatch-meta { background: white; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
+  .swatch-meta .name { font-size: 14px; font-weight: 600; color: var(--sb-purple); }
+  .swatch-meta .hex { font-size: 13px; color: var(--sb-text-muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .swatch-meta .role { font-size: 13px; color: var(--sb-text-muted); margin-top: 4px; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-bottom: 32px; }
+
+  .do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .do, .dont { background: white; border: 1px solid var(--sb-rule); border-radius: 12px; padding: 24px; }
+  .do-label, .dont-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .do-label { color: #2a8a3e; }
+  .dont-label { color: #b04545; }
+  .do ul, .dont ul { list-style: none; }
+  .do li, .dont li { padding: 6px 0 6px 22px; position: relative; font-size: 14px; color: var(--sb-text); }
+  .do li::before { content: "✓"; position: absolute; left: 0; color: #2a8a3e; font-weight: 700; }
+  .dont li::before { content: "✗"; position: absolute; left: 0; color: #b04545; font-weight: 700; }
+
+  .type-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 100px;
+    gap: 24px;
+    align-items: baseline;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--sb-rule);
+  }
+  .type-row:last-child { border-bottom: none; }
+  .type-row .label { font-size: 12px; color: var(--sb-text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .type-row .meta { font-size: 12px; color: var(--sb-text-muted); font-family: ui-monospace, monospace; text-align: right; }
+  .type-h1 { font-size: 48px; font-weight: 600; letter-spacing: -0.02em; color: var(--sb-purple); }
+  .type-h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.01em; color: var(--sb-purple); }
+  .type-h3 { font-size: 22px; font-weight: 600; color: var(--sb-purple); }
+  .type-body { font-size: 16px; color: var(--sb-text); }
+  .type-small { font-size: 13px; color: var(--sb-text-muted); }
+  .type-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; color: var(--sb-text); }
+
+  .voice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 16px; }
+  .voice-cell { background: white; border: 1px solid var(--sb-rule); border-radius: 12px; padding: 24px; }
+  .voice-cell .quote { font-size: 18px; color: var(--sb-purple); line-height: 1.4; font-weight: 500; }
+  .voice-cell .meta { font-size: 12px; color: var(--sb-text-muted); margin-top: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  footer {
+    margin-top: 120px;
+    padding-top: 40px;
+    border-top: 1px solid var(--sb-rule);
+    color: var(--sb-text-muted);
+    font-size: 13px;
+  }
+
+  .divider { height: 1px; background: var(--sb-rule); margin: 80px 0; }
+
+  nav.toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 24px 0;
+    border-top: 1px solid var(--sb-rule);
+    border-bottom: 1px solid var(--sb-rule);
+    margin-bottom: 80px;
+  }
+  nav.toc a {
+    font-size: 13px;
+    color: var(--sb-text-muted);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid var(--sb-rule);
+    transition: all 0.15s ease;
+  }
+  nav.toc a:hover { color: var(--sb-purple); border-color: var(--sb-purple); }
+
+  .character-card {
+    background: var(--sb-purple);
+    border-radius: 24px;
+    padding: 64px;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 64px;
+    align-items: center;
+    margin-bottom: 32px;
+  }
+  .character-card .name {
+    color: var(--sb-green);
+    font-size: 48px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .character-card p { color: var(--sb-cream); font-size: 17px; max-width: 50ch; }
+  .character-card p:not(:last-child) { margin-bottom: 16px; }
+
+  @media (max-width: 800px) {
+    .page { padding: 48px 24px 80px; }
+    .hero { grid-template-columns: 1fr; gap: 32px; padding-bottom: 48px; margin-bottom: 48px; }
+    .hero-icon { width: 200px; height: 200px; }
+    .hero-text h1 { font-size: 48px; }
+    .cols, .do-dont, .voice-row { grid-template-columns: 1fr; }
+    .palette { grid-template-columns: 1fr; }
+    .logo-grid { grid-template-columns: repeat(2, 1fr); }
+    .type-row { grid-template-columns: 1fr; gap: 8px; }
+    .character-card { grid-template-columns: 1fr; gap: 32px; padding: 40px; text-align: center; }
+    .character-card svg { margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <svg class="hero-icon" viewBox="0 0 1024 1024">
+      <defs><clipPath id="frameH"><rect width="1024" height="1024" rx="225"/></clipPath></defs>
+      <g clip-path="url(#frameH)">
+        <rect width="1024" height="1024" fill="#332c50"/>
+        <rect x="164" y="164" width="696" height="1024" rx="113" fill="#e2f3e4"/>
+        <rect x="256" y="256" width="512" height="512" rx="72" fill="#94e344"/>
+        <rect x="328" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+        <rect x="614" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+      </g>
+    </svg>
+    <div class="hero-text">
+      <div class="eyebrow">Brand guidelines · v1.0</div>
+      <h1>Standboy</h1>
+      <p class="tagline">A Game Boy that wakes up while your agent works.</p>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#mission">Mission</a>
+    <a href="#character">Character</a>
+    <a href="#logo">Logo</a>
+    <a href="#palette">Palette</a>
+    <a href="#typography">Typography</a>
+    <a href="#voice">Voice</a>
+    <a href="#motion">Motion</a>
+  </nav>
+
+  <section id="mission">
+    <h2>Section 01</h2>
+    <h3>What Standboy is</h3>
+    <p class="lead">Standboy is a VSCode and Cursor extension that turns AI coding agent wait time into play time. When the agent is generating code, a sidebar panel auto-expands to reveal a Game Boy emulator. When the agent finishes, the panel collapses and the emulator pauses.</p>
+
+    <div class="cols">
+      <div>
+        <h4>Why it exists</h4>
+        <p>The hidden cost of agent wait time isn't boredom. It's the tab-switch to Twitter, Reddit, or Slack — where users lose ten or more minutes to algorithmic rabbit holes before remembering the agent finished. A built-in micro-distraction with a hard end condition keeps users in the IDE.</p>
+      </div>
+      <div>
+        <h4>What we believe</h4>
+        <p>The auto-hide on completion is the feature; the game is the wrapper. The product disappears into the workflow. The tone is earnest: this is a real solution to a real problem, not a meme. The Game Boy is the answer because it has a hard pause boundary — Reddit doesn't.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <section id="character">
+    <h2>Section 02</h2>
+    <h3>Meet Standboy</h3>
+    <p class="lead">Standboy is the name and Standboy is the character. The icon isn't a device — it's a tiny watcher with two eyes peering up over a green screen. It naps when there's nothing to watch, and wakes the moment the agent starts moving.</p>
+
+    <div class="character-card">
+      <svg width="220" height="220" viewBox="0 0 1024 1024">
+        <defs><clipPath id="char1"><rect width="1024" height="1024" rx="225"/></clipPath></defs>
+        <g clip-path="url(#char1)">
+          <rect width="1024" height="1024" fill="#332c50"/>
+          <rect x="164" y="164" width="696" height="1024" rx="113" fill="#e2f3e4"/>
+          <rect x="256" y="256" width="512" height="512" rx="72" fill="#94e344"/>
+          <rect x="328" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+          <rect x="614" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+        </g>
+      </svg>
+      <div>
+        <div class="name">Standboy.</div>
+        <p>Half stand-by, half Game Boy. Always quietly present, never demanding attention.</p>
+        <p>Standboy is the patient friend who's already in the room. He's not here to fix your code or hype your productivity — he's here for the in-between moments. When your agent starts thinking, Standboy wakes up. When it's done, he tucks back down.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <section id="logo">
+    <h2>Section 03</h2>
+    <h3>The mark</h3>
+    <p class="lead">The Standboy icon is the character itself: a stylized handheld reduced to its essentials — cream body, green screen, two eyes peering up. The body extends past the bottom edge of the frame, suggesting a friend half-tucked away, present but at rest.</p>
+
+    <h4>Sizes</h4>
+    <div class="logo-grid">
+      <div class="logo-cell">
+        <svg width="160" height="160" viewBox="0 0 1024 1024">
+          <defs><clipPath id="f160"><rect width="1024" height="1024" rx="225"/></clipPath></defs>
+          <g clip-path="url(#f160)">
+            <rect width="1024" height="1024" fill="#332c50"/>
+            <rect x="164" y="164" width="696" height="1024" rx="113" fill="#e2f3e4"/>
+            <rect x="256" y="256" width="512" height="512" rx="72" fill="#94e344"/>
+            <rect x="328" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+            <rect x="614" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+          </g>
+        </svg>
+        <span class="label">160px · marketplace</span>
+      </div>
+      <div class="logo-cell">
+        <svg width="96" height="96" viewBox="0 0 1024 1024">
+          <defs><clipPath id="f96"><rect width="1024" height="1024" rx="225"/></clipPath></defs>
+          <g clip-path="url(#f96)">
+            <rect width="1024" height="1024" fill="#332c50"/>
+            <rect x="164" y="164" width="696" height="1024" rx="113" fill="#e2f3e4"/>
+            <rect x="256" y="256" width="512" height="512" rx="72" fill="#94e344"/>
+            <rect x="328" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+            <rect x="614" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+          </g>
+        </svg>
+        <span class="label">96px · README</span>
+      </div>
+      <div class="logo-cell">
+        <svg width="48" height="48" viewBox="0 0 1024 1024">
+          <defs><clipPath id="f48"><rect width="1024" height="1024" rx="225"/></clipPath></defs>
+          <g clip-path="url(#f48)">
+            <rect width="1024" height="1024" fill="#332c50"/>
+            <rect x="164" y="164" width="696" height="1024" rx="113" fill="#e2f3e4"/>
+            <rect x="256" y="256" width="512" height="512" rx="72" fill="#94e344"/>
+            <rect x="328" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+            <rect x="614" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+          </g>
+        </svg>
+        <span class="label">48px · favicon</span>
+      </div>
+      <div class="logo-cell dark">
+        <svg width="32" height="32" viewBox="0 0 1024 1024">
+          <defs><clipPath id="f32"><rect width="1024" height="1024" rx="225"/></clipPath></defs>
+          <g clip-path="url(#f32)">
+            <rect width="1024" height="1024" fill="#332c50"/>
+            <rect x="164" y="164" width="696" height="1024" rx="113" fill="#e2f3e4"/>
+            <rect x="256" y="256" width="512" height="512" rx="72" fill="#94e344"/>
+            <rect x="328" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+            <rect x="614" y="409" width="82" height="82" rx="15" fill="#332c50"/>
+          </g>
+        </svg>
+        <span class="label">32px · activity bar</span>
+      </div>
+    </div>
+
+    <h4 style="margin-top:32px">Construction</h4>
+    <p>The icon is built on a 1024×1024 grid with a 225px corner radius (~22% — matching iOS/macOS app icon conventions). The cream body sits 16% inside the frame on top and sides, and extends past the bottom edge. The green square is centered horizontally and occupies 50% of the canvas width. Eyes are 8% of the canvas, positioned in the upper third of the screen with generous spacing — wider-set eyes read as friendly, not intense.</p>
+  </section>
+
+  <div class="divider"></div>
+
+  <section id="palette">
+    <h2>Section 04</h2>
+    <h3>Palette</h3>
+    <p class="lead">Three colors. Each one earns its place by doing structural work. The palette is borrowed from the <em>Kirokaze Gameboy</em> palette on Lospec — a modern indie aesthetic with a vibrant green accent.</p>
+
+    <div class="palette">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#332c50"><span style="color:#e2f3e4">SB-0 · Background</span></div>
+        <div class="swatch-meta">
+          <span class="name">Deep purple</span>
+          <span class="hex">#332C50</span>
+          <span class="role">Frame, dark surfaces, eye glyphs.</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#e2f3e4"><span style="color:#332c50">SB-1 · Body</span></div>
+        <div class="swatch-meta">
+          <span class="name">Cream</span>
+          <span class="hex">#E2F3E4</span>
+          <span class="role">Standboy's body, light text, cards.</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#94e344"><span style="color:#332c50">SB-2 · Accent</span></div>
+        <div class="swatch-meta">
+          <span class="name">Standboy green</span>
+          <span class="hex">#94E344</span>
+          <span class="role">Screen, active states, focus.</span>
+        </div>
+      </div>
+    </div>
+
+    <h4>Configurable in-product palettes</h4>
+    <p>Users can switch the in-product UI chrome to any of the bundled palettes (DMG, BGB, Pocket, Mist) or supply their own four hex codes. The icon and brand mark always use Kirokaze regardless of user palette — Standboy's identity is fixed; only the in-product chrome adapts.</p>
+  </section>
+
+  <div class="divider"></div>
+
+  <section id="typography">
+    <h2>Section 05</h2>
+    <h3>Typography</h3>
+    <p class="lead">No pixel fonts. Pixel typography is the obvious move and therefore the wrong one — it locks the brand into "retro nostalgia product" instead of "thoughtful tool that happens to play retro games." We use a clean modern sans-serif stack and let the icon carry the retro reference.</p>
+
+    <div style="background:white;border:1px solid var(--sb-rule);border-radius:12px;padding:8px 32px">
+      <div class="type-row">
+        <span class="label">Display</span>
+        <span class="type-h1">Standboy</span>
+        <span class="meta">48–64px · 600 · -0.02em</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Heading</span>
+        <span class="type-h2">Wait time, well spent</span>
+        <span class="meta">28–32px · 600</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Subheading</span>
+        <span class="type-h3">Auto-resumes when your agent does</span>
+        <span class="meta">20–22px · 600</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Body</span>
+        <span class="type-body">A Game Boy that wakes up while your agent works.</span>
+        <span class="meta">16px · 400 · 1.6lh</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Caption</span>
+        <span class="type-small">Standboy · v1.0 · 2026</span>
+        <span class="meta">13px · 400</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Mono</span>
+        <span class="type-mono">standboy.palette = "kirokaze"</span>
+        <span class="meta">14px · ui-monospace</span>
+      </div>
+    </div>
+
+    <p style="margin-top:24px">Font stack: <span style="font-family:ui-monospace,monospace;font-size:13px">-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif</span>. Standboy is intended to look native to whatever OS he's living on.</p>
+  </section>
+
+  <div class="divider"></div>
+
+  <section id="voice">
+    <h2>Section 06</h2>
+    <h3>Voice &amp; tone</h3>
+    <p class="lead">Earnest, warm, occasionally playful. Standboy is a character — write about him like he's a quiet friend, not a feature list. Avoid jokes about agents being slow or LLMs hallucinating. The tone is "this is a thoughtful little tool," not "lol AI is dumb."</p>
+
+    <div class="voice-row">
+      <div class="voice-cell">
+        <div class="quote">"A Game Boy that wakes up while your agent works."</div>
+        <div class="meta">Tagline · primary</div>
+      </div>
+      <div class="voice-cell">
+        <div class="quote">"Standboy auto-resumes the moment your agent starts generating, and pauses again when it stops. You don't manage him. You play."</div>
+        <div class="meta">Marketplace blurb</div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div>
+        <h4>Use these words</h4>
+        <p>Wake, rest, return, ready, pause, resume, idle, present, attentive, watch. Words that echo Standboy's two-state behavior and his quiet personality.</p>
+      </div>
+      <div>
+        <h4>Avoid these words</h4>
+        <p>Slay, vibes, GOAT, brain rot, dopamine, hack, productivity hack, AI bro, cope, distraction, supercharge, unleash, level-up. Anything that signals winking nihilism or productivity-influencer culture.</p>
+      </div>
+    </div>
+
+    <h4 style="margin-top:32px">Standboy is "he," not "it"</h4>
+    <p>When writing copy where the choice is natural, refer to Standboy as <em>he</em>. He wakes, he watches, he tucks back down. This isn't grammatically required — "Standboy auto-resumes" is fine — but the character framing is part of the brand. When in doubt, write the line both ways and pick whichever sounds warmer.</p>
+  </section>
+
+  <div class="divider"></div>
+
+  <section id="motion">
+    <h2>Section 07</h2>
+    <h3>Motion</h3>
+    <p class="lead">The auto-show / auto-hide transition is the moment users see most often. It is the brand's only required animation. Everything else is optional.</p>
+
+    <div class="cols">
+      <div>
+        <h4>Wake transition</h4>
+        <p>The panel slides in from the right edge of the IDE over 240ms with a slight overshoot (cubic-bezier 0.34, 1.56, 0.64, 1). The emulator resumes mid-frame, exactly where it paused. This is Standboy waking up.</p>
+      </div>
+      <div>
+        <h4>Rest transition</h4>
+        <p>The panel slides out over 200ms with a standard ease-out curve. The emulator pauses one frame before the slide begins so the freeze is visible. This is Standboy tucking back down.</p>
+      </div>
+    </div>
+
+    <p style="margin-top:24px">No bouncing logos, no pulsing standby dots, no spinner animations. Standboy at rest is <em>still</em>. Motion only happens at the boundary between states.</p>
+  </section>
+
+  <footer>
+    <p>Standboy — Brand guidelines v1.0 · 2026 · This document is the source of truth. Update here, then update everywhere else.</p>
+  </footer>
+
+</div>
+</body>
+</html>

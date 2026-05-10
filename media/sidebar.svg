@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Body: matches icon.svg's outer rect (rx ≈ 22% of viewBox). Inset 1 unit so the 1.5px stroke fits inside the viewBox. -->
+  <rect x="1" y="1" width="22" height="22" rx="5"/>
+  <!-- Face: matches icon.svg's cream rect (width 696/1024 ≈ 68%, rx 113/696 ≈ 16%). -->
+  <rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/>
+  <!-- Eyes: matches icon.svg's eye positions (328/614 → scaled to 24×24, with size 2×2 ≈ 82/1024). -->
+  <rect x="7.5" y="9.5" width="2" height="2" rx="0.4" fill="currentColor" stroke="none"/>
+  <rect x="14.5" y="9.5" width="2" height="2" rx="0.4" fill="currentColor" stroke="none"/>
+</svg>

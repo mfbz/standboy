@@ -1,0 +1,139 @@
+{
+  "name": "standboy",
+  "displayName": "Standboy",
+  "description": "A Game Boy emulator that auto-shows during AI agent activity.",
+  "version": "0.1.0",
+  "publisher": "mfbzme",
+  "license": "MIT",
+  "icon": "media/icon-512.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfbz/standboy.git"
+  },
+  "homepage": "https://github.com/mfbz/standboy#readme",
+  "bugs": {
+    "url": "https://github.com/mfbz/standboy/issues"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other",
+    "AI"
+  ],
+  "keywords": [
+    "gameboy",
+    "emulator",
+    "retro",
+    "ai",
+    "agent",
+    "claude",
+    "cursor",
+    "copilot"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "vendor": "node scripts/vendor-emulatorjs.mjs",
+    "rom-db": "node scripts/build-rom-db.mjs",
+    "compile": "npm run vendor && node esbuild.mjs",
+    "build": "npm run vendor && node esbuild.mjs --production",
+    "watch": "npm run vendor && node esbuild.mjs --watch",
+    "package": "vsce package --no-dependencies",
+    "lint": "eslint src/ webview/",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p webview/tsconfig.json --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "vscode:prepublish": "npm run build",
+    "clean": "rm -rf dist vendor *.vsix"
+  },
+  "dependencies": {
+    "@emulatorjs/core-gambatte": "4.2.3",
+    "@emulatorjs/core-mgba": "4.2.3",
+    "@emulatorjs/emulatorjs": "4.2.3",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "overrides": {
+    "glob": "^11.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.4",
+    "@types/node": "^25.6.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.9.1",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.3.0",
+    "postcss": "^8.5.14",
+    "prettier": "^3.8.3",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^4.1.5"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "standboy",
+          "title": "Standboy",
+          "icon": "media/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "standboy": [
+        {
+          "type": "webview",
+          "id": "standboy.gameView",
+          "name": "Standboy"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Standboy",
+      "properties": {
+        "standboy.palette": {
+          "type": "string",
+          "default": "kirokaze",
+          "enum": [
+            "kirokaze",
+            "dmg",
+            "pocket",
+            "bgb",
+            "mist"
+          ],
+          "description": "Color palette for Standboy's chrome (does not affect game output)."
+        },
+        "standboy.customPalette": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "maxItems": 4,
+          "minItems": 0,
+          "description": "Optional 4-element array of hex codes (dark→light). Overrides standboy.palette when valid."
+        },
+        "standboy.libraryDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Override the location of Standboy's ROM library and saves. Leave empty to use VSCode's globalStorage (open the Standboy menu and click 'Open library folder' to see the active path). Useful for syncing saves via iCloud, Dropbox, or similar."
+        },
+        "standboy.autoShow": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-expand the Standboy panel during AI agent activity (and auto-collapse 5 seconds after activity stops). Disable to keep the panel manual-only — click the activity-bar icon when you want to play. The activity dot still pulses either way so you can see at a glance that an agent is working."
+        }
+      }
+    }
+  }
+}
