@@ -815,8 +815,8 @@ export function App(): ReactElement {
               top: 0,
               left: 0,
               height: "2px",
-              background: "var(--sb-c1)",
-              boxShadow: "0 0 4px var(--sb-c1)",
+              background: "var(--sb-c2)",
+              boxShadow: "0 0 4px var(--sb-c2)",
               animation: `sb-countdown-shrink ${closingMs}ms linear forwards`,
             }}
           />
