@@ -28,6 +28,16 @@ export class StandboyViewProvider implements vscode.WebviewViewProvider {
     this.onMessage = handler;
   }
 
+  // True only when the Standboy view container is the active item in the
+  // sidebar AND the sidebar itself is visible. Drives focus-shift decisions
+  // upstream so we don't yank the user into the panel that's already on
+  // screen or close a sidebar that's showing something else. Returns false
+  // before the view has been resolved (e.g. first activation with the
+  // sidebar closed); callers should treat that case as "not visible".
+  isVisible(): boolean {
+    return this.view?.visible === true;
+  }
+
   // Returns undefined if the view hasn't been resolved yet — callers fall back to a placeholder.
   asWebviewFileUri(absolutePath: string): string | undefined {
     if (!this.view) return undefined;
