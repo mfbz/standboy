@@ -78,6 +78,7 @@ export type HostToWebview =
   | { kind: "coverUpdate"; hash: string; coverUri: string | null }
   | { kind: "bindings"; bindings: KeyBindings }
   | { kind: "agentStatus"; status: AgentStatus }
+  | { kind: "autoShow"; enabled: boolean }
   // Hard reload — the only reliable way to swap the running ROM, since
   // EmulatorJS has no clean teardown.
   | { kind: "reload" }
@@ -98,4 +99,5 @@ export type WebviewToHost =
   | { kind: "menu"; action: MenuAction }
   | { kind: "switchRom"; hash: string }
   | { kind: "saveBindings"; bindings: KeyBindings }
-  | { kind: "setAgent"; agent: Agent; enabled: boolean };
+  | { kind: "setAgent"; agent: Agent; enabled: boolean }
+  | { kind: "setAutoShow"; enabled: boolean };

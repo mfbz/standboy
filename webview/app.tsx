@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
-import { Bot, Volume2, VolumeX, X } from "lucide-react";
+import {
+  Bot,
+  Download,
+  Eye,
+  FolderOpen,
+  Plus,
+  ScrollText,
+  Trash2,
+  Upload,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { onMessage, send } from "./messaging";
 import { StandbyDot } from "./components/standby-dot";
 import { EmulatorHost } from "./components/emulator-host";
@@ -155,6 +168,7 @@ interface ActionSpec {
   label: string;
   action: MenuAction;
   enabled: boolean;
+  icon: LucideIcon;
 }
 
 const SECTION_LABEL_STYLE: React.CSSProperties = {
@@ -387,17 +401,20 @@ function ActionItem({
   spec: ActionSpec;
   onClick: () => void;
 }): ReactElement {
+  const Icon = spec.icon;
   return (
     <button
       type="button"
       disabled={!spec.enabled}
       onClick={onClick}
       style={{
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
         width: "100%",
-        padding: "9px 16px",
+        padding: "10px 16px",
         textAlign: "left",
-        fontSize: "12px",
+        fontSize: "12.5px",
         color: "var(--sb-c3)",
         background: "transparent",
         border: "none",
@@ -410,7 +427,8 @@ function ActionItem({
       }}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
-      {spec.label}
+      <Icon size={17} strokeWidth={2} />
+      <span style={{ flex: 1 }}>{spec.label}</span>
     </button>
   );
 }
@@ -421,9 +439,11 @@ function Menu({
   bindings,
   listening,
   agentStatus,
+  autoShow,
   onStartListen,
   onToggleMute,
   onToggleAgent,
+  onToggleAutoShow,
   onClose,
 }: {
   hasRom: boolean;
@@ -431,9 +451,11 @@ function Menu({
   bindings: KeyBindings;
   listening: BindableAction | null;
   agentStatus: AgentStatus;
+  autoShow: boolean;
   onStartListen: (a: BindableAction) => void;
   onToggleMute: () => void;
   onToggleAgent: (agent: Agent, enabled: boolean) => void;
+  onToggleAutoShow: (enabled: boolean) => void;
   onClose: () => void;
 }): ReactElement {
   useEffect(() => {
@@ -444,18 +466,62 @@ function Menu({
     return () => window.removeEventListener("keydown", onEsc);
   }, [onClose]);
 
-  const actions: ActionSpec[] = [
-    { label: "Load ROM…", action: "loadRom", enabled: true },
-    { label: "Export save", action: "exportSave", enabled: hasRom },
-    { label: "Import save", action: "importSave", enabled: hasRom },
+  const libraryActions: ActionSpec[] = [
+    { label: "Load ROM…", action: "loadRom", enabled: true, icon: Plus },
     {
       label: "Open library folder",
       action: "openLibraryFolder",
       enabled: true,
+      icon: FolderOpen,
     },
-    { label: "Delete ROM…", action: "deleteRom", enabled: true },
-    { label: "Show logs", action: "showLogs", enabled: true },
+    {
+      label: "Delete ROM…",
+      action: "deleteRom",
+      enabled: true,
+      icon: Trash2,
+    },
   ];
+  const saveActions: ActionSpec[] = [
+    {
+      label: "Export save…",
+      action: "exportSave",
+      enabled: hasRom,
+      icon: Download,
+    },
+    {
+      label: "Import save…",
+      action: "importSave",
+      enabled: hasRom,
+      icon: Upload,
+    },
+  ];
+  const diagnosticsActions: ActionSpec[] = [
+    {
+      label: "Show logs",
+      action: "showLogs",
+      enabled: true,
+      icon: ScrollText,
+    },
+  ];
+
+  const renderAction = (spec: ActionSpec): ReactElement => (
+    <ActionItem
+      key={spec.action}
+      spec={spec}
+      onClick={() => {
+        // Force-capture SRAM before any disk-touching save action.
+        // The save message rides ahead of the menu message in the same
+        // channel, and the extension's serialized queue guarantees the
+        // write completes before the export/import command reads the
+        // save file from disk.
+        if (spec.action === "exportSave" || spec.action === "importSave") {
+          window.__standboyFlushSave?.();
+        }
+        send({ kind: "menu", action: spec.action });
+        onClose();
+      }}
+    />
+  );
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50 }}>
@@ -579,32 +645,63 @@ function Menu({
 
         <MenuSpacer />
 
+        <div style={SECTION_LABEL_STYLE}>Auto-show</div>
+        <button
+          type="button"
+          onClick={() => onToggleAutoShow(!autoShow)}
+          aria-label={`Turn auto-show ${autoShow ? "off" : "on"}`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            width: "100%",
+            padding: "10px 16px",
+            background: "transparent",
+            border: "none",
+            color: "var(--sb-c3)",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "transparent")
+          }
+        >
+          <Eye size={17} strokeWidth={2} />
+          <span style={{ flex: 1, fontSize: "12.5px" }}>
+            Auto-expand during agent activity
+          </span>
+          <span
+            style={{
+              ...STATUS_PILL_BASE,
+              background: autoShow ? "var(--sb-c2)" : "rgba(255,255,255,0.07)",
+              color: autoShow ? "var(--sb-c0)" : "rgba(226,243,228,0.65)",
+            }}
+          >
+            {autoShow ? "On" : "Off"}
+          </span>
+        </button>
+
+        <MenuSpacer />
+
         <DetectionSection status={agentStatus} onToggleAgent={onToggleAgent} />
 
         <MenuSpacer />
 
         <div style={SECTION_LABEL_STYLE}>Library</div>
-        {actions.map((spec) => (
-          <ActionItem
-            key={spec.action}
-            spec={spec}
-            onClick={() => {
-              // Force-capture SRAM before any disk-touching save action.
-              // The save message rides ahead of the menu message in the
-              // same channel, and the extension's serialized queue
-              // guarantees the write completes before the export/import
-              // command reads the save file from disk.
-              if (
-                spec.action === "exportSave" ||
-                spec.action === "importSave"
-              ) {
-                window.__standboyFlushSave?.();
-              }
-              send({ kind: "menu", action: spec.action });
-              onClose();
-            }}
-          />
-        ))}
+        {libraryActions.map(renderAction)}
+
+        <MenuSpacer />
+
+        <div style={SECTION_LABEL_STYLE}>Save data</div>
+        {saveActions.map(renderAction)}
+
+        <MenuSpacer />
+
+        <div style={SECTION_LABEL_STYLE}>Diagnostics</div>
+        {diagnosticsActions.map(renderAction)}
       </div>
     </div>
   );
@@ -632,6 +729,9 @@ export function App(): ReactElement {
   const [listening, setListening] = useState<BindableAction | null>(null);
   const [agentStatus, setAgentStatus] =
     useState<AgentStatus>(EMPTY_AGENT_STATUS);
+  // Default true matches the host-side default — the value gets corrected
+  // by the host's `autoShow` message after `ready` lands.
+  const [autoShow, setAutoShow] = useState(true);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -673,6 +773,9 @@ export function App(): ReactElement {
           break;
         case "agentStatus":
           setAgentStatus(msg.status);
+          break;
+        case "autoShow":
+          setAutoShow(msg.enabled);
           break;
         case "closingTimer":
           setClosingMs(msg.durationMs);
@@ -815,8 +918,8 @@ export function App(): ReactElement {
               top: 0,
               left: 0,
               height: "2px",
-              background: "var(--sb-c1)",
-              boxShadow: "0 0 4px var(--sb-c1)",
+              background: "var(--sb-c2)",
+              boxShadow: "0 0 4px var(--sb-c2)",
               animation: `sb-countdown-shrink ${closingMs}ms linear forwards`,
             }}
           />
@@ -925,8 +1028,13 @@ export function App(): ReactElement {
           bindings={bindings}
           listening={listening}
           agentStatus={agentStatus}
+          autoShow={autoShow}
           onStartListen={(a) => setListening(a)}
           onToggleMute={() => setMuted((m) => !m)}
+          onToggleAutoShow={(enabled) => {
+            setAutoShow(enabled);
+            send({ kind: "setAutoShow", enabled });
+          }}
           onToggleAgent={(agent, enabled) => {
             // Optimistic update — host echoes the real state via agentStatus
             // after the disk write completes. Mutually exclusive: turning
