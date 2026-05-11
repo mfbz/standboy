@@ -515,14 +515,14 @@ export async function activate(
         void vscode.commands.executeCommand("standboy.gameView.focus");
       }
     } else if (intent === "collapse") {
-      // Hide the sidebar instead of switching it to Explorer. The
-      // previous `workbench.view.explorer` pop opened a sidebar that
-      // had been closed and stomped on whichever view the user had
-      // intentionally selected. Only act if Standboy is actually the
-      // visible view — otherwise the user moved on during the run and
-      // we'd be closing a sidebar they're using for something else.
+      // Swap back to Explorer, but only when Standboy is actually the
+      // visible view. The visibility gate is what makes this safe: if
+      // the sidebar is closed or showing something else (user moved on
+      // mid-run), `.visible` is false and we don't run the command —
+      // so we never pop open a sidebar the user had closed, and never
+      // stomp on a view they intentionally switched to.
       if (provider.isVisible()) {
-        void vscode.commands.executeCommand("workbench.action.closeSidebar");
+        void vscode.commands.executeCommand("workbench.view.explorer");
       }
     }
   });
