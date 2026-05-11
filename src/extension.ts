@@ -11,7 +11,11 @@ import { ensureCoverFile } from "./covers";
 import { Config } from "./config";
 import { friendlyName, lookupCanonicalName } from "./database";
 import { romSha1 } from "./hash";
-import { ensureMarkerInstalled, watchSentinel } from "./agent";
+import {
+  cleanupStaleSentinel,
+  ensureMarkerInstalled,
+  watchSentinel,
+} from "./agent";
 import { getAgentStatus, setExclusiveAgent } from "./hooks";
 import type { Agent, LibraryEntry, MenuAction, Rom } from "./messages";
 
@@ -100,13 +104,15 @@ export async function activate(
   );
   const detector = new ActivityDetector();
 
-  // Eagerly create ~/.standboy/ + the marker script at activation. VSCode's
-  // FileSystemWatcher against a non-existent base directory is unreliable
-  // on macOS — silently never fires even after the dir is later created.
+  // Eagerly create ~/.standboy/ + the marker script at activation, then
+  // sweep any stale sentinel from a previous crash so the watcher's first
+  // read can't mistake it for a real in-flight agent run.
   try {
     await ensureMarkerInstalled();
+    const removed = await cleanupStaleSentinel();
+    if (removed) log("agent: removed stale sentinel from previous session");
   } catch (err) {
-    logError("agent: marker install at activate failed", err);
+    logError("agent: activation prep failed", err);
   }
 
   // While ~/.standboy/agent-active exists, the override flag pins activity
@@ -487,7 +493,7 @@ export async function activate(
     }),
     { dispose: () => detector.dispose() },
     { dispose: () => provider.dispose() },
-    sentinelWatcher
+    { dispose: () => sentinelWatcher.dispose() }
   );
 
   // Read freshly each time so the user can flip it without reloading the window.
@@ -502,9 +508,22 @@ export async function activate(
     provider.postMessage({ kind: "activity", state });
     const intent = focusIntentFor(state, autoShowEnabled());
     if (intent === "expand") {
-      void vscode.commands.executeCommand("standboy.gameView.focus");
+      // Skip the focus shift when Standboy is already on screen — the
+      // user might be mid-keystroke in the editor and the focus command
+      // would yank them into the webview every back-to-back agent turn.
+      if (!provider.isVisible()) {
+        void vscode.commands.executeCommand("standboy.gameView.focus");
+      }
     } else if (intent === "collapse") {
-      void vscode.commands.executeCommand("workbench.view.explorer");
+      // Hide the sidebar instead of switching it to Explorer. The
+      // previous `workbench.view.explorer` pop opened a sidebar that
+      // had been closed and stomped on whichever view the user had
+      // intentionally selected. Only act if Standboy is actually the
+      // visible view — otherwise the user moved on during the run and
+      // we'd be closing a sidebar they're using for something else.
+      if (provider.isVisible()) {
+        void vscode.commands.executeCommand("workbench.action.closeSidebar");
+      }
     }
   });
 

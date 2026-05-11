@@ -2,7 +2,7 @@
   "name": "standboy",
   "displayName": "Standboy",
   "description": "A Game Boy emulator that auto-shows during AI agent activity.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "mfbzme",
   "license": "MIT",
   "icon": "media/icon-512.png",
