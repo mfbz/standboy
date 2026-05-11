@@ -2,7 +2,12 @@ import * as vscode from "vscode";
 import { writeFile, readFile } from "node:fs/promises";
 import { log, logError, showLogs } from "./log";
 import { StandboyViewProvider } from "./view";
-import { onPaletteChange } from "./settings";
+import {
+  onAutoShowChange,
+  onPaletteChange,
+  readAutoShow,
+  writeAutoShow,
+} from "./settings";
 import { ActivityDetector, focusIntentFor } from "./activity";
 import { pickAndImportRom } from "./rom";
 import { Library } from "./library";
@@ -385,6 +390,7 @@ export async function activate(
       // effect — the user's customizations are live from the first frame.
       const cfg = await config.read();
       provider.postMessage({ kind: "bindings", bindings: cfg.bindings });
+      provider.postMessage({ kind: "autoShow", enabled: readAutoShow() });
       void postAgentStatus();
       const lib = await library.readLibrary();
       if (lib.lastPlayedHash) await loadAndPostRom(lib.lastPlayedHash);
@@ -442,6 +448,15 @@ export async function activate(
       }
       await postAgentStatus();
     }
+    if (msg.kind === "setAutoShow") {
+      try {
+        await writeAutoShow(msg.enabled);
+      } catch (err) {
+        logError("settings: setAutoShow failed", err);
+      }
+      // onAutoShowChange echoes the persisted value back to the webview,
+      // so we don't post here — avoids a stale-state race if the write fails.
+    }
   };
 
   provider.setMessageHandler((msg) => {
@@ -461,6 +476,9 @@ export async function activate(
     ),
     onPaletteChange((palette) =>
       provider.postMessage({ kind: "palette", palette })
+    ),
+    onAutoShowChange((enabled) =>
+      provider.postMessage({ kind: "autoShow", enabled })
     ),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("standboy.libraryDirectory")) {
@@ -496,17 +514,13 @@ export async function activate(
     { dispose: () => sentinelWatcher.dispose() }
   );
 
-  // Read freshly each time so the user can flip it without reloading the window.
-  function autoShowEnabled(): boolean {
-    return vscode.workspace
-      .getConfiguration("standboy")
-      .get<boolean>("autoShow", true);
-  }
-
   detector.onChange((state) => {
     log("activity", state);
     provider.postMessage({ kind: "activity", state });
-    const intent = focusIntentFor(state, autoShowEnabled());
+    // Read freshly each time so the user can flip the setting without
+    // reloading the window — onAutoShowChange will also re-render the
+    // webview pill, but the gating decision is always made against disk.
+    const intent = focusIntentFor(state, readAutoShow());
     if (intent === "expand") {
       // Skip the focus shift when Standboy is already on screen — the
       // user might be mid-keystroke in the editor and the focus command
@@ -531,7 +545,7 @@ export async function activate(
   // countdown progress bar. Only fires when auto-show is on AND the
   // panel is actually visible — otherwise the announcement is noise.
   detector.onSchedule((pending) => {
-    if (!autoShowEnabled()) return;
+    if (!readAutoShow()) return;
     provider.postMessage({
       kind: "closingTimer",
       durationMs: pending?.durationMs ?? null,

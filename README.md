@@ -119,7 +119,7 @@ Both edges of the auto-show transition are debounced so trivial "let me check" a
 - **5-second hide delay.** When the agent stops, Standboy waits 5 seconds before sending focus back. A back-to-back follow-up turn keeps the panel up uninterrupted; only a real lull triggers the auto-collapse.
 - **Visible countdown.** When the hide timer is running, a thin progress bar in the palette's accent green shrinks across the top of the panel over those 5 seconds — so you can see the auto-collapse coming and aren't surprised by the focus shift.
 
-If you'd rather Standboy never auto-show and stay strictly manual, set `standboy.autoShow` to `false`. The activity dot still pulses while an agent is working, so you can glance at the activity bar to see the agent's state — but focus never moves on its own.
+If you'd rather Standboy never auto-show and stay strictly manual, open the panel's `⋯` menu and flip **Auto-show** off (equivalent to setting `standboy.autoShow` to `false`). The activity dot still pulses while an agent is working, so you can glance at the activity bar to see the agent's state — but focus never moves on its own.
 
 ## Data and storage
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
-import { Bot, Volume2, VolumeX, X } from "lucide-react";
+import { Bot, Eye, Volume2, VolumeX, X } from "lucide-react";
 import { onMessage, send } from "./messaging";
 import { StandbyDot } from "./components/standby-dot";
 import { EmulatorHost } from "./components/emulator-host";
@@ -421,9 +421,11 @@ function Menu({
   bindings,
   listening,
   agentStatus,
+  autoShow,
   onStartListen,
   onToggleMute,
   onToggleAgent,
+  onToggleAutoShow,
   onClose,
 }: {
   hasRom: boolean;
@@ -431,9 +433,11 @@ function Menu({
   bindings: KeyBindings;
   listening: BindableAction | null;
   agentStatus: AgentStatus;
+  autoShow: boolean;
   onStartListen: (a: BindableAction) => void;
   onToggleMute: () => void;
   onToggleAgent: (agent: Agent, enabled: boolean) => void;
+  onToggleAutoShow: (enabled: boolean) => void;
   onClose: () => void;
 }): ReactElement {
   useEffect(() => {
@@ -579,6 +583,47 @@ function Menu({
 
         <MenuSpacer />
 
+        <div style={SECTION_LABEL_STYLE}>Auto-show</div>
+        <button
+          type="button"
+          onClick={() => onToggleAutoShow(!autoShow)}
+          aria-label={`Turn auto-show ${autoShow ? "off" : "on"}`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            width: "100%",
+            padding: "10px 16px",
+            background: "transparent",
+            border: "none",
+            color: "var(--sb-c3)",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "transparent")
+          }
+        >
+          <Eye size={17} strokeWidth={2} />
+          <span style={{ flex: 1, fontSize: "12.5px" }}>
+            Auto-expand during agent activity
+          </span>
+          <span
+            style={{
+              ...STATUS_PILL_BASE,
+              background: autoShow ? "var(--sb-c2)" : "rgba(255,255,255,0.07)",
+              color: autoShow ? "var(--sb-c0)" : "rgba(226,243,228,0.65)",
+            }}
+          >
+            {autoShow ? "On" : "Off"}
+          </span>
+        </button>
+
+        <MenuSpacer />
+
         <DetectionSection status={agentStatus} onToggleAgent={onToggleAgent} />
 
         <MenuSpacer />
@@ -632,6 +677,9 @@ export function App(): ReactElement {
   const [listening, setListening] = useState<BindableAction | null>(null);
   const [agentStatus, setAgentStatus] =
     useState<AgentStatus>(EMPTY_AGENT_STATUS);
+  // Default true matches the host-side default — the value gets corrected
+  // by the host's `autoShow` message after `ready` lands.
+  const [autoShow, setAutoShow] = useState(true);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -673,6 +721,9 @@ export function App(): ReactElement {
           break;
         case "agentStatus":
           setAgentStatus(msg.status);
+          break;
+        case "autoShow":
+          setAutoShow(msg.enabled);
           break;
         case "closingTimer":
           setClosingMs(msg.durationMs);
@@ -925,8 +976,13 @@ export function App(): ReactElement {
           bindings={bindings}
           listening={listening}
           agentStatus={agentStatus}
+          autoShow={autoShow}
           onStartListen={(a) => setListening(a)}
           onToggleMute={() => setMuted((m) => !m)}
+          onToggleAutoShow={(enabled) => {
+            setAutoShow(enabled);
+            send({ kind: "setAutoShow", enabled });
+          }}
           onToggleAgent={(agent, enabled) => {
             // Optimistic update — host echoes the real state via agentStatus
             // after the disk write completes. Mutually exclusive: turning
