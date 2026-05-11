@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/icon-128.png" alt="Standboy" width="128" height="128" />
+  <img src="media/icon-512.png" alt="Standboy" width="256" height="256" />
 </p>
 
 <h1 align="center">Standboy</h1>
@@ -7,7 +7,7 @@
 <p align="center">A Game Boy that wakes up while your agent works.</p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=mfbzme.standboy"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/mfbzme.standboy?label=VS%20Code%20Marketplace&color=332c50&labelColor=332c50" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=mfbzme.standboy"><img alt="VS Code Marketplace" src="https://img.shields.io/github/package-json/v/mfbz/standboy?label=VS%20Code%20Marketplace&color=332c50&labelColor=332c50" /></a>
   <a href="https://open-vsx.org/extension/mfbzme/standboy"><img alt="Open VSX" src="https://img.shields.io/open-vsx/v/mfbzme/standboy?label=Open%20VSX&color=94e344&labelColor=332c50" /></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-e2f3e4?labelColor=332c50" /></a>
 </p>
