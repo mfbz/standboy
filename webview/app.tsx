@@ -532,9 +532,11 @@ function Menu({
           top: 0,
           left: 0,
           right: 0,
+          maxHeight: "100%",
           background: "var(--sb-c0)",
           borderRadius: "0 0 22px 22px",
-          overflow: "hidden",
+          overflowY: "auto",
+          overflowX: "hidden",
           boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
           paddingBottom: "20px",
         }}
