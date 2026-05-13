@@ -314,7 +314,7 @@ export async function activate(
     // delivered to a webview that's about to reload it away. The webview
     // flushes save before sending the menu action (see app.tsx), so the
     // running game's last few seconds aren't lost.
-    provider.postMessage({ kind: "reload" });
+    provider.reload();
   }
 
   async function openLibraryFolderAction(): Promise<void> {
@@ -407,7 +407,7 @@ export async function activate(
     // would hit the !currentRomHash branch and likewise fail to swap).
     // Same EJS-teardown constraint as switchRom / loadRomAction.
     if (deletedRunning) {
-      provider.postMessage({ kind: "reload" });
+      provider.reload();
       return;
     }
     await postLibrary();
@@ -497,7 +497,7 @@ export async function activate(
       // and the next save flush would write the old game's SRAM under
       // the new hash — corrupting the new game's save file.
       await library.touch(msg.hash);
-      provider.postMessage({ kind: "reload" });
+      provider.reload();
     }
     if (msg.kind === "saveBindings") {
       try {

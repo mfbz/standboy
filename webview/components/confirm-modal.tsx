@@ -5,12 +5,19 @@ interface Props {
   title: string;
   body: ReactNode;
   confirmLabel: string;
-  // Convention: the backdrop click and the Escape key both invoke onCancel.
-  // Callers should make sure cancellation is non-destructive — never wire
-  // a destructive default to onCancel.
+  // Convention: backdrop click and Escape both invoke onCancel. Callers
+  // must keep cancellation non-destructive — never wire a destructive
+  // default to onCancel.
   onConfirm: () => void;
   onCancel: () => void;
 }
+
+// Matches the panel root's background expression (see app.tsx). Keeping
+// the card on the same fill makes the modal read as "an elevated piece of
+// the panel" rather than "a foreign tile placed on top of it" — the design
+// brief is flat: same color as the surface it sits on, no gradient, just
+// a shadow for elevation.
+const CARD_BG = "color-mix(in srgb, var(--sb-c0) 72%, black)";
 
 export function ConfirmModal({
   title,
@@ -21,9 +28,6 @@ export function ConfirmModal({
 }: Props): ReactElement {
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
-  // Stable per-instance ids — keeps `aria-labelledby` / `aria-describedby`
-  // unique if two ConfirmModals are ever stacked (currently they can't be,
-  // but the cost is one hook call and it future-proofs the a11y wiring).
   const titleId = useId();
   const bodyId = useId();
 
@@ -86,7 +90,10 @@ export function ConfirmModal({
         alignItems: "center",
         justifyContent: "center",
         padding: "24px",
-        background: "color-mix(in srgb, var(--sb-c0) 78%, black)",
+        // Translucent dim so the panel content stays legible underneath —
+        // the modal is a focus-puller, not a wall. Pure black at low alpha
+        // works against every palette without a color-cast.
+        background: "rgba(0,0,0,0.5)",
         animation: "sb-backdrop-fade-in 180ms ease-out both",
       }}
     >
@@ -97,14 +104,15 @@ export function ConfirmModal({
         aria-labelledby={titleId}
         aria-describedby={bodyId}
         style={{
-          background:
-            "linear-gradient(180deg, color-mix(in srgb, var(--sb-c1) 36%, var(--sb-c0)) 0%, var(--sb-c0) 100%)",
-          border: "1px solid color-mix(in srgb, var(--sb-c3) 9%, transparent)",
-          borderRadius: "12px",
-          padding: "18px 18px 14px",
+          background: CARD_BG,
+          borderRadius: "20px",
+          padding: "20px 20px 16px",
           width: "100%",
           maxWidth: "320px",
-          boxShadow: "0 12px 32px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3)",
+          // Shadow does the elevation work since the fill matches the
+          // panel — no gradient, no border, no inset highlight.
+          boxShadow:
+            "0 16px 40px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.35)",
           animation: "sb-modal-pop 220ms cubic-bezier(0.2, 0.8, 0.4, 1) both",
         }}
       >
@@ -127,7 +135,7 @@ export function ConfirmModal({
             lineHeight: 1.5,
             color: "var(--sb-c3)",
             opacity: 0.72,
-            marginBottom: "16px",
+            marginBottom: "18px",
           }}
         >
           {body}
@@ -159,12 +167,12 @@ export function ConfirmModal({
   );
 }
 
-const PRIMARY_REST_SHADOW =
-  "0 1px 0 rgba(255,255,255,0.15) inset, 0 1px 2px rgba(0,0,0,0.2)";
+// Focus rings only — no rest-state shadows or inset highlights anywhere.
+// The modal's own shadow supplies depth; buttons sit flat on the card.
 const PRIMARY_FOCUS_SHADOW =
-  "0 0 0 2px color-mix(in srgb, var(--sb-c2) 50%, transparent), 0 1px 0 rgba(255,255,255,0.15) inset, 0 1px 2px rgba(0,0,0,0.2)";
+  "0 0 0 2px color-mix(in srgb, var(--sb-c2) 45%, transparent)";
 const GHOST_FOCUS_SHADOW =
-  "0 0 0 2px color-mix(in srgb, var(--sb-c3) 25%, transparent)";
+  "0 0 0 2px color-mix(in srgb, var(--sb-c3) 22%, transparent)";
 
 function ModalButton({
   variant,
@@ -186,19 +194,23 @@ function ModalButton({
       style={{
         background: isPrimary ? "var(--sb-c2)" : "transparent",
         color: isPrimary ? "var(--sb-c0)" : "var(--sb-c3)",
+        // Ghost border at 16% (rather than the 14% used in the prior pass)
+        // — the card's hairline border was removed for the flat redesign,
+        // and a hair more contrast here keeps Cancel visually distinct
+        // from the body text against the card fill.
         border: isPrimary
           ? "none"
-          : "1px solid color-mix(in srgb, var(--sb-c3) 14%, transparent)",
-        padding: "6px 14px",
-        borderRadius: "6px",
+          : "1px solid color-mix(in srgb, var(--sb-c3) 16%, transparent)",
+        padding: "7px 14px",
+        borderRadius: "8px",
         fontSize: "11px",
         fontWeight: 700,
         letterSpacing: "0.06em",
         textTransform: "uppercase",
         cursor: "pointer",
-        boxShadow: isPrimary ? PRIMARY_REST_SHADOW : "none",
+        boxShadow: "none",
         transition:
-          "transform 150ms ease-out, filter 150ms ease-out, background 150ms ease-out",
+          "filter 150ms ease-out, background 150ms ease-out, box-shadow 150ms ease-out",
         outline: "none",
       }}
       onFocus={(e) => {
@@ -207,14 +219,11 @@ function ModalButton({
           : GHOST_FOCUS_SHADOW;
       }}
       onBlur={(e) => {
-        e.currentTarget.style.boxShadow = isPrimary
-          ? PRIMARY_REST_SHADOW
-          : "none";
+        e.currentTarget.style.boxShadow = "none";
       }}
       onMouseEnter={(e) => {
         if (isPrimary) {
           e.currentTarget.style.filter = "brightness(1.08)";
-          e.currentTarget.style.transform = "translateY(-1px)";
         } else {
           e.currentTarget.style.background = "rgba(255,255,255,0.06)";
         }
@@ -222,7 +231,6 @@ function ModalButton({
       onMouseLeave={(e) => {
         if (isPrimary) {
           e.currentTarget.style.filter = "";
-          e.currentTarget.style.transform = "";
         } else {
           e.currentTarget.style.background = "transparent";
         }

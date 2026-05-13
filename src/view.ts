@@ -96,6 +96,21 @@ export class StandboyViewProvider implements vscode.WebviewViewProvider {
     this.view?.webview.postMessage(message);
   }
 
+  // Forces a full iframe recreation by re-assigning the webview's HTML.
+  // We used to ask the webview to `location.reload()` itself, but that
+  // path leaves the previous webview's service worker controlling the new
+  // iframe in Cursor (and sometimes VSCode) — the `Found unexpected
+  // service worker controller` warning appears, the SW handoff never
+  // completes, and the panel stays blank. Reassigning `webview.html` is
+  // the host-driven path: VSCode tears the iframe down and brings up a
+  // fresh one with a fresh SW. The existing onDidReceiveMessage listener
+  // persists across the reassignment, so the new iframe's `ready` lands
+  // on the same handler.
+  reload(): void {
+    if (!this.view) return;
+    this.view.webview.html = this.getHtml(this.view.webview);
+  }
+
   dispose(): void {
     this.messageListener?.dispose();
     this.messageListener = undefined;

@@ -35,14 +35,16 @@ export function CoverCard({ entry, active, onClick }: Props): ReactElement {
           boxShadow: active
             ? "0 0 0 2px var(--sb-c2), 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px color-mix(in srgb, var(--sb-c2) 22%, transparent)"
             : "0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.18)",
-          transition:
-            "transform 200ms cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 200ms ease-out",
+          // Tiles MUST stay rigid — no transform on hover or press so every
+          // cell stays the same physical size. Hover affordance is a subtle
+          // brightness lift only (no scale, no translate, no shadow growth).
+          transition: "filter 150ms ease-out",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "translateY(-3px) scale(1.02)";
+          e.currentTarget.style.filter = "brightness(1.06)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "";
+          e.currentTarget.style.filter = "";
         }}
       >
         {showCover ? (

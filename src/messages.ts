@@ -92,9 +92,6 @@ export type HostToWebview =
   // it becomes meaningful. Always paired with a preceding `connectCta` with
   // an empty `agents` so the CTA clears before the toast renders.
   | { kind: "cleanupTip" }
-  // Hard reload — the only reliable way to swap the running ROM, since
-  // EmulatorJS has no clean teardown.
-  | { kind: "reload" }
   // Auto-hide announcement: `durationMs` → render countdown bar; `null` → clear it.
   | { kind: "closingTimer"; durationMs: number | null };
 

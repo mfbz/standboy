@@ -290,11 +290,15 @@ export class Library {
     });
   }
 
-  // Sorted by lastPlayedAt descending.
+  // Sorted by addedAt ascending — the library is a stable "shelf." Sorting
+  // by lastPlayedAt would reflow the whole grid every time the user switches
+  // ROMs, killing muscle memory; the currently-playing ROM is already
+  // marked with the green ring in the UI. New imports land at the end of
+  // the grid, next to the + Add tile, which keeps existing positions fixed.
   async listRoms(): Promise<Array<{ hash: string } & RomEntry>> {
     const lib = await this.readLibrary();
     return Object.entries(lib.roms)
       .map(([hash, entry]) => ({ hash, ...entry }))
-      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt));
+      .sort((a, b) => a.addedAt.localeCompare(b.addedAt));
   }
 }

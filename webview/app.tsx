@@ -815,12 +815,6 @@ export function App(): ReactElement {
           setClosingMs(msg.durationMs);
           if (msg.durationMs !== null) setClosingKey((k) => k + 1);
           break;
-        case "reload":
-          // Hard reload — the only reliable way to swap the running ROM.
-          // EmulatorJS has no teardown, so a soft remount of EmulatorHost
-          // would leave the old game running.
-          location.reload();
-          break;
       }
     });
   }, []);
@@ -1016,11 +1010,18 @@ export function App(): ReactElement {
         {rom && (
           <div style={{ padding: "14px 16px 0" }}>
             <div
+              title={rom.displayName}
               style={{
                 fontSize: "14px",
                 fontWeight: 600,
                 marginBottom: "3px",
                 letterSpacing: "-0.01em",
+                // Single line so the panel height stays constant across ROM
+                // changes — a wrapping title would shift everything below
+                // (library grid, CTA slot) every time the user switches.
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {rom.displayName}
