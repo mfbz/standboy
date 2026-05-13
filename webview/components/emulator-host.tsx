@@ -201,85 +201,115 @@ export function EmulatorHost({
     if (initedRef.current) return;
     initedRef.current = true;
 
-    if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-    // ROM bytes arrive as number[] (see src/messages.ts) — rehydrate
-    // into a Uint8Array before handing to Blob, otherwise Blob falls
-    // back to String() and writes "[object Object]" into the FS.
-    const romBytes = new Uint8Array(rom.bytes);
-    const blob = new Blob([romBytes], { type: "application/octet-stream" });
-    const blobUrl = URL.createObjectURL(blob);
-    blobUrlRef.current = blobUrl;
-
-    const game = document.createElement("div");
-    game.id = "game";
-    containerRef.current.replaceChildren(game);
-
-    const saveToInject = rom.save ? new Uint8Array(rom.save) : undefined;
-    window.EJS_player = "#game";
-    window.EJS_gameUrl = blobUrl;
-    // EmulatorJS uses gameName to derive the in-FS path for the ROM and
-    // the libretro core's save-file path. RetroArch's content loader
-    // chokes on special characters (parens, commas, spaces) in those
-    // paths and falls back to its main menu instead of starting the
-    // game. Use a simple, predictable name; the original filename is
-    // still shown in our UI via `rom.name`.
-    window.EJS_gameName = `rom.${rom.ext}`;
-    window.EJS_core = CORE_FOR_EXT[rom.ext];
-    window.EJS_pathtodata = dataUrl;
-    window.EJS_volume = muted ? 0 : 0.5;
-    window.EJS_startOnLoaded = true;
-    // VSCode webviews don't set COOP/COEP headers, so SharedArrayBuffer
-    // isn't available. Force EmulatorJS onto the non-threaded core to
-    // avoid hanging during decompression while it tries to use SAB.
-    window.EJS_threads = false;
-    window.EJS_onGameStart = () => {
-      if (saveToInject) loadSaveBytes(saveToInject);
-    };
-
-    const script = document.createElement("script");
-    script.src = loaderUrl;
-    script.async = true;
-    document.body.appendChild(script);
-
-    // Seed `lastSentBytes` with the save we just loaded so the very first
-    // flush doesn't redundantly post the same bytes back to disk.
-    let lastSentBytes: Uint8Array | null = saveToInject
-      ? new Uint8Array(saveToInject)
-      : null;
-
-    const flushSave = () => {
-      const bytes = getSaveBytes();
-      if (!bytes) return;
-      if (bytesEqual(bytes, lastSentBytes)) return;
-      // Snapshot detached from EJS's internal buffer for the next compare.
-      const copy = new Uint8Array(bytes);
-      lastSentBytes = copy;
-      // Serialise to number[] for the postMessage bridge — VSCode JSON-
-      // encodes between webview and extension host, and Uint8Array
-      // doesn't survive that round-trip cleanly.
-      send({ kind: "save", hash: rom.hash, bytes: Array.from(copy) });
-    };
-
-    // Event-driven save sync — no polling. SRAM lives in EmulatorJS's
-    // IDBFS-backed FS (auto-persisted to IndexedDB) at all times, so the
-    // game state is never lost between sessions even without a single
-    // disk write on our side. We mirror SRAM into `<libraryRoot>/saves/
-    // <hash>.sav` only at moments when staleness would actually matter:
-    //  - panel becomes hidden (visibilitychange → "hidden")
-    //  - page is unloading (pagehide / beforeunload)
-    //  - user clicks Export / Import (manual flush via the global hook)
-    //  - real component unmount (lifecycle effect's cleanup)
-    // The listeners themselves live in the lifecycle effect above and
-    // delegate through `flushSaveRef`, so they survive `rom` prop changes.
-    flushSaveRef.current = flushSave;
+    // Real-unmount cancel flag. If the lifecycle effect's cleanup fires
+    // before the async fetch resolves, the IIFE bails before allocating
+    // a blob URL or appending the loader script — otherwise an unmount
+    // mid-fetch would leak both.
+    let cancelled = false;
+    let script: HTMLScriptElement | null = null;
     bootCleanupRef.current = () => {
-      script.remove();
+      cancelled = true;
+      script?.remove();
       window.EJS_onGameStart = undefined;
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
       }
     };
+
+    void (async () => {
+      // ROM bytes come in through a webview-resource URI rather than the
+      // postMessage payload — a 32MB GBA ROM serialised inline crashed the
+      // extension host. Fetch into a Blob, then hand EJS a blob: URL the
+      // same way as before.
+      let blobUrl: string;
+      try {
+        const response = await fetch(rom.romUri);
+        if (!response.ok) {
+          throw new Error(`ROM fetch failed: HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        if (cancelled) return;
+        blobUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = blobUrl;
+      } catch (err) {
+        console.error("Standboy: ROM fetch failed", err);
+        return;
+      }
+
+      if (cancelled || !containerRef.current) return;
+
+      const game = document.createElement("div");
+      game.id = "game";
+      containerRef.current.replaceChildren(game);
+
+      const saveToInject = rom.save ? new Uint8Array(rom.save) : undefined;
+      window.EJS_player = "#game";
+      window.EJS_gameUrl = blobUrl;
+      // EmulatorJS uses gameName to derive the in-FS path for the ROM and
+      // the libretro core's save-file path. RetroArch's content loader
+      // chokes on special characters (parens, commas, spaces) in those
+      // paths and falls back to its main menu instead of starting the
+      // game. Use a simple, predictable name; the original filename is
+      // still shown in our UI via `rom.name`.
+      window.EJS_gameName = `rom.${rom.ext}`;
+      window.EJS_core = CORE_FOR_EXT[rom.ext];
+      window.EJS_pathtodata = dataUrl;
+      window.EJS_volume = muted ? 0 : 0.5;
+      window.EJS_startOnLoaded = true;
+      // VSCode webviews don't set COOP/COEP headers, so SharedArrayBuffer
+      // isn't available. Force EmulatorJS onto the non-threaded core to
+      // avoid hanging during decompression while it tries to use SAB.
+      window.EJS_threads = false;
+      window.EJS_onGameStart = () => {
+        if (saveToInject) loadSaveBytes(saveToInject);
+        // EJS has copied the ROM into its Emscripten FS by now — release
+        // the Blob so the browser can reclaim the ROM-sized buffer that's
+        // been parked in the webview heap since fetch. bootCleanupRef's
+        // revoke is now a no-op (guarded by the null check).
+        if (blobUrlRef.current) {
+          URL.revokeObjectURL(blobUrlRef.current);
+          blobUrlRef.current = null;
+        }
+      };
+
+      script = document.createElement("script");
+      script.src = loaderUrl;
+      script.async = true;
+      document.body.appendChild(script);
+
+      // Seed `lastSentBytes` with the save we just loaded so the very first
+      // flush doesn't redundantly post the same bytes back to disk.
+      let lastSentBytes: Uint8Array | null = saveToInject
+        ? new Uint8Array(saveToInject)
+        : null;
+
+      const flushSave = () => {
+        const bytes = getSaveBytes();
+        if (!bytes) return;
+        if (bytesEqual(bytes, lastSentBytes)) return;
+        // Snapshot detached from EJS's internal buffer for the next compare.
+        const copy = new Uint8Array(bytes);
+        lastSentBytes = copy;
+        // Serialise to number[] for the postMessage bridge — VSCode JSON-
+        // encodes between webview and extension host, and Uint8Array
+        // doesn't survive that round-trip cleanly.
+        send({ kind: "save", hash: rom.hash, bytes: Array.from(copy) });
+      };
+
+      // Event-driven save sync — no polling. SRAM lives in EmulatorJS's
+      // IDBFS-backed FS (auto-persisted to IndexedDB) at all times, so the
+      // game state is never lost between sessions even without a single
+      // disk write on our side. We mirror SRAM into `<libraryRoot>/saves/
+      // <hash>.sav` only at moments when staleness would actually matter:
+      //  - panel becomes hidden (visibilitychange → "hidden")
+      //  - page is unloading (pagehide / beforeunload)
+      //  - user clicks Export / Import (manual flush via the global hook)
+      //  - real component unmount (lifecycle effect's cleanup)
+      // The listeners themselves live in the lifecycle effect above and
+      // delegate through `flushSaveRef`, so they survive `rom` prop changes.
+      flushSaveRef.current = flushSave;
+    })();
 
     // Note: `muted` is intentionally NOT in the deps array. It's read at
     // boot to seed EJS_volume; live mute changes are handled by the

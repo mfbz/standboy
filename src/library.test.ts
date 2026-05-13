@@ -81,6 +81,24 @@ describe("Library", () => {
     expect(await lib.loadRom("0000000000000000")).toBeNull();
   });
 
+  it("loadRom returns null when the index entry outlives the file", async () => {
+    const hash = await lib.addRom(new Uint8Array([1, 2, 3]), "gb", "x.gb");
+    await rm(join(root, "roms", `${hash}.gb`));
+    expect(await lib.loadRom(hash)).toBeNull();
+  });
+
+  it("romFilePath returns <root>/roms/<hash>.<ext>", () => {
+    expect(lib.romFilePath("deadbeef", "gb")).toBe(
+      join(root, "roms", "deadbeef.gb")
+    );
+    expect(lib.romFilePath("deadbeef", "gbc")).toBe(
+      join(root, "roms", "deadbeef.gbc")
+    );
+    expect(lib.romFilePath("deadbeef", "gba")).toBe(
+      join(root, "roms", "deadbeef.gba")
+    );
+  });
+
   it("deleteRom removes the ROM file, save file, and index entry", async () => {
     const hash = await lib.addRom(new Uint8Array([7]), "gba", "c.gba");
     await lib.writeSave(hash, new Uint8Array([8, 9]));
@@ -94,13 +112,18 @@ describe("Library", () => {
     expect(await lib.loadRom(hash)).toBeNull();
   });
 
-  it("listRoms is sorted by lastPlayedAt descending", async () => {
-    const a = await lib.addRom(new Uint8Array([1]), "gb", "old.gb");
+  it("listRoms is sorted by addedAt ascending so the grid is a stable shelf", async () => {
+    // Older imports stay at the front; new imports land at the end (next
+    // to the + Add tile). Re-touching `b` later doesn't reorder — the grid
+    // doesn't reflow on play, which is the whole point of the addedAt sort.
+    const a = await lib.addRom(new Uint8Array([1]), "gb", "older.gb");
     await new Promise((r) => setTimeout(r, 10));
     const b = await lib.addRom(new Uint8Array([2]), "gb", "newer.gb");
+    await new Promise((r) => setTimeout(r, 10));
+    await lib.touch(a);
 
     const list = await lib.listRoms();
-    expect(list.map((r) => r.hash)).toEqual([b, a]);
+    expect(list.map((r) => r.hash)).toEqual([a, b]);
   });
 
   it("readLibrary recovers from a corrupt library.json", async () => {

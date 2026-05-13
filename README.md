@@ -48,13 +48,14 @@ code --install-extension standboy-x.y.z.vsix
 
 ## First launch
 
-The first time Standboy activates, it auto-opens the panel and shows a welcome dialog: pick **Connect Claude Code** or **Connect Cursor** (whichever is detected on your system) to wire up auto-show during AI activity, or close the dialog to skip. You can change this anytime from the panel's `⋯` menu under **Detection**.
-
-Once the welcome is past, you'll see:
+The first time Standboy activates, it auto-opens the panel — no modal. You'll see:
 
 - An empty header (`STANDBOY` activity dot, ROM title slot, `⋯` menu, mute icon)
 - A blank screen frame with the words **`no cartridge`**
+- A small **Auto-show during AI activity** card above the library grid, prompting you to connect whichever agent is detected (Claude Code if `~/.claude/settings.json` exists, or Cursor if you're running inside Cursor). Click **Connect** to wire up the lifecycle hooks, or the **×** to dismiss it — you can always toggle the same thing later from the `⋯` menu under **Detection**.
 - An empty library grid showing only a dashed **+ Add ROM** tile
+
+After your first successful connect, a one-shot footnote reminds you to disconnect Detection before uninstalling Standboy (VSCode has no reliable uninstall hook). The footnote auto-dismisses after a few seconds, and there's an **×** to close it sooner.
 
 From here:
 
@@ -90,7 +91,7 @@ Click the `×` in the drawer's top-right (or anywhere outside it) to close. Esc 
 
 ### Switching ROMs
 
-Click any cover in the library grid to switch to that ROM. Standboy flushes the current game's save, persists which ROM is active, and reloads — your previous save is automatically loaded for the new game on the next launch. The currently-playing ROM is highlighted with a green ring and a play badge.
+Click any cover in the library grid to switch to that ROM. The currently-playing ROM is highlighted with a green ring; clicking a different cover while a game is running brings up a confirmation prompt (the new game starts only after you confirm — your in-progress save has already been flushed by then, so cancelling is non-destructive). On confirm, Standboy persists which ROM is active and reloads — the new game's save is loaded automatically.
 
 The **+ Add ROM** tile at the end of the grid opens the file picker.
 

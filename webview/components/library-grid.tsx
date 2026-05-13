@@ -58,6 +58,9 @@ function AddTile({ onClick }: { onClick: () => void }): ReactElement {
         alignItems: "stretch",
         textAlign: "center",
       }}
+      // Tiles MUST stay rigid — no transform on hover. Border-color, fill
+      // and shadow change but the box doesn't move or scale, matching the
+      // CoverCard convention so every grid cell stays the same physical size.
       onMouseEnter={(e) => {
         const tile = e.currentTarget.firstElementChild as HTMLElement;
         tile.style.borderColor = "var(--sb-c2)";
@@ -66,7 +69,6 @@ function AddTile({ onClick }: { onClick: () => void }): ReactElement {
         tile.style.background = "rgba(148,227,68,0.06)";
         tile.style.boxShadow =
           "0 0 0 1px rgba(148,227,68,0.3), 0 8px 20px rgba(148,227,68,0.12)";
-        tile.style.transform = "translateY(-2px)";
       }}
       onMouseLeave={(e) => {
         const tile = e.currentTarget.firstElementChild as HTMLElement;
@@ -75,7 +77,6 @@ function AddTile({ onClick }: { onClick: () => void }): ReactElement {
         tile.style.color = "rgba(226,243,228,0.45)";
         tile.style.background = "rgba(255,255,255,0.015)";
         tile.style.boxShadow = "";
-        tile.style.transform = "";
       }}
     >
       <div

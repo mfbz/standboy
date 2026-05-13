@@ -39,7 +39,9 @@ export interface LibraryFile {
 
 export interface LoadedRom {
   hash: string;
-  // Raw bytes / save — serialized to number[] only when posting to the webview.
+  // Read entirely into memory. Today only the backfill SHA-1 lookup uses
+  // this; the playback path goes through romFilePath() + a webview-resource
+  // URI so the host never holds the bytes.
   bytes: Uint8Array<ArrayBuffer>;
   ext: RomExt;
   name: string;
@@ -103,7 +105,7 @@ export class Library {
     return path.join(this.root, "library.json");
   }
 
-  private romFile(hash: string, ext: RomExt): string {
+  romFilePath(hash: string, ext: RomExt): string {
     return path.join(this.romsDir, `${hash}.${ext}`);
   }
   private saveFile(hash: string): string {
@@ -173,7 +175,7 @@ export class Library {
     return this.serialize(async () => {
       await this.ensureDirs();
       const hash = romHash(bytes);
-      const dest = this.romFile(hash, ext);
+      const dest = this.romFilePath(hash, ext);
       if (!(await exists(dest))) {
         await writeAtomic(dest, bytes);
       }
@@ -240,7 +242,7 @@ export class Library {
     if (!entry) return null;
     try {
       const bytes = (await readFile(
-        this.romFile(hash, entry.ext)
+        this.romFilePath(hash, entry.ext)
       )) as Uint8Array<ArrayBuffer>;
       const save = await this.readSave(hash);
       return {
@@ -278,7 +280,7 @@ export class Library {
       const lib = await this.readLibrary();
       const entry = lib.roms[hash];
       if (!entry) return;
-      await rm(this.romFile(hash, entry.ext), { force: true });
+      await rm(this.romFilePath(hash, entry.ext), { force: true });
       await this.deleteSave(hash);
       await rm(this.coverFile(hash), { force: true });
       await rm(this.coverMissFile(hash), { force: true });
@@ -288,11 +290,15 @@ export class Library {
     });
   }
 
-  // Sorted by lastPlayedAt descending.
+  // Sorted by addedAt ascending — the library is a stable "shelf." Sorting
+  // by lastPlayedAt would reflow the whole grid every time the user switches
+  // ROMs, killing muscle memory; the currently-playing ROM is already
+  // marked with the green ring in the UI. New imports land at the end of
+  // the grid, next to the + Add tile, which keeps existing positions fixed.
   async listRoms(): Promise<Array<{ hash: string } & RomEntry>> {
     const lib = await this.readLibrary();
     return Object.entries(lib.roms)
       .map(([hash, entry]) => ({ hash, ...entry }))
-      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt));
+      .sort((a, b) => a.addedAt.localeCompare(b.addedAt));
   }
 }

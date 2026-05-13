@@ -18,6 +18,9 @@ import { onMessage, send } from "./messaging";
 import { StandbyDot } from "./components/standby-dot";
 import { EmulatorHost } from "./components/emulator-host";
 import { LibraryGrid } from "./components/library-grid";
+import { ConnectCta } from "./components/connect-cta";
+import { CleanupTipToast } from "./components/cleanup-tip-toast";
+import { ConfirmModal } from "./components/confirm-modal";
 import type {
   ActivityState,
   Agent,
@@ -509,12 +512,18 @@ function Menu({
       key={spec.action}
       spec={spec}
       onClick={() => {
-        // Force-capture SRAM before any disk-touching save action.
+        // Force-capture SRAM ahead of actions that depend on a fresh save:
+        // - exportSave / importSave: host reads the file from disk.
+        // - loadRom: importing a different ROM triggers a webview reload,
+        //   which would otherwise lose the current session's last seconds.
         // The save message rides ahead of the menu message in the same
-        // channel, and the extension's serialized queue guarantees the
-        // write completes before the export/import command reads the
-        // save file from disk.
-        if (spec.action === "exportSave" || spec.action === "importSave") {
+        // channel, and the host's serialized queue guarantees the write
+        // completes before the menu action runs.
+        if (
+          spec.action === "exportSave" ||
+          spec.action === "importSave" ||
+          spec.action === "loadRom"
+        ) {
           window.__standboyFlushSave?.();
         }
         send({ kind: "menu", action: spec.action });
@@ -734,6 +743,20 @@ export function App(): ReactElement {
   // Default true matches the host-side default — the value gets corrected
   // by the host's `autoShow` message after `ready` lands.
   const [autoShow, setAutoShow] = useState(true);
+  // Host-driven onboarding. `connectCtaAgents` lists every detected, not-
+  // yet-connected agent — the CTA renders one button per entry. Empty array
+  // hides the CTA. `cleanupTipKey` is bumped each time the host sends
+  // `cleanupTip`, forcing a remount so the toast's animation restarts
+  // cleanly even if a previous instance hadn't yet finished.
+  const [connectCtaAgents, setConnectCtaAgents] = useState<Agent[]>([]);
+  const [cleanupTipKey, setCleanupTipKey] = useState<number | null>(null);
+  // Hash of the ROM the user just clicked while a *different* game was
+  // running. Triggers an in-panel confirm modal — clicking a cover is a
+  // low-friction action and we don't want a typo'd click to interrupt
+  // mid-game. Null = no pending switch.
+  const [pendingSwitchHash, setPendingSwitchHash] = useState<string | null>(
+    null
+  );
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -753,7 +776,7 @@ export function App(): ReactElement {
         case "rom":
           setRom({
             hash: msg.hash,
-            bytes: msg.bytes,
+            romUri: msg.romUri,
             ext: msg.ext,
             name: msg.name,
             displayName: msg.displayName,
@@ -779,15 +802,18 @@ export function App(): ReactElement {
         case "autoShow":
           setAutoShow(msg.enabled);
           break;
+        case "connectCta":
+          setConnectCtaAgents(msg.agents);
+          break;
+        case "cleanupTip":
+          // Bump the key so a fresh mount restarts the auto-dismiss timer
+          // and the entry animation — covers the unlikely case of two
+          // tips firing back-to-back.
+          setCleanupTipKey((k) => (k ?? 0) + 1);
+          break;
         case "closingTimer":
           setClosingMs(msg.durationMs);
           if (msg.durationMs !== null) setClosingKey((k) => k + 1);
-          break;
-        case "reload":
-          // Hard reload — the only reliable way to swap the running ROM.
-          // EmulatorJS has no teardown, so a soft remount of EmulatorHost
-          // would leave the old game running.
-          location.reload();
           break;
       }
     });
@@ -850,6 +876,12 @@ export function App(): ReactElement {
   // processed exactly once, by us.
   useEffect(() => {
     if (listening) return;
+    // Suspend in-game input while the switch-confirm modal is open. The
+    // modal's capture-phase Enter handler runs *after* this one (its
+    // useEffect mounts later), so without this gate the default Enter→Start
+    // binding would pulse Start on the outgoing game before the modal
+    // closes — visible if the user happened to be on a save screen.
+    if (pendingSwitchHash) return;
     const press = (e: KeyboardEvent, value: 0 | 1) => {
       if (e.repeat) return;
       const incoming = normalizeKey(e.key);
@@ -874,7 +906,17 @@ export function App(): ReactElement {
       window.removeEventListener("keydown", onDown, { capture: true });
       window.removeEventListener("keyup", onUp, { capture: true });
     };
-  }, [bindings, listening]);
+  }, [bindings, listening, pendingSwitchHash]);
+
+  useEffect(() => {
+    // Clear a stale pending switch if the running ROM or its target entry
+    // vanishes (e.g., reload race re-emits `rom` as null, or the entry got
+    // deleted out from under us). Without this, the modal could re-pop
+    // after a transient null when both come back.
+    if (!pendingSwitchHash) return;
+    const stillValid = rom && library.some((e) => e.hash === pendingSwitchHash);
+    if (!stillValid) setPendingSwitchHash(null);
+  }, [rom, library, pendingSwitchHash]);
 
   const currentEntry = rom ? library.find((e) => e.hash === rom.hash) : null;
 
@@ -968,11 +1010,18 @@ export function App(): ReactElement {
         {rom && (
           <div style={{ padding: "14px 16px 0" }}>
             <div
+              title={rom.displayName}
               style={{
                 fontSize: "14px",
                 fontWeight: 600,
                 marginBottom: "3px",
                 letterSpacing: "-0.01em",
+                // Single line so the panel height stays constant across ROM
+                // changes — a wrapping title would shift everything below
+                // (library grid, CTA slot) every time the user switches.
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {rom.displayName}
@@ -1009,19 +1058,91 @@ export function App(): ReactElement {
         )}
       </div>
 
+      {(() => {
+        // Toast wins over CTA. After a CTA-initiated connect the CTA also
+        // hides on its own (host posts connectCta:[] before cleanupTip),
+        // but checking explicitly avoids a one-frame race where both render.
+        if (cleanupTipKey !== null) {
+          return (
+            <div style={{ padding: "12px 14px 0" }}>
+              <CleanupTipToast
+                key={cleanupTipKey}
+                onDismiss={() => setCleanupTipKey(null)}
+              />
+            </div>
+          );
+        }
+        if (connectCtaAgents.length === 0) return null;
+        return (
+          <div style={{ padding: "12px 14px 0" }}>
+            <ConnectCta
+              agents={connectCtaAgents}
+              onConnect={(agent) => {
+                // Optimistic — host echoes the real connect state via
+                // agentStatus + connectCta([]) once setExclusiveAgent
+                // resolves. Hide immediately to keep the click snappy.
+                const other: Agent = agent === "claude" ? "cursor" : "claude";
+                setConnectCtaAgents([]);
+                setAgentStatus((prev) => ({
+                  ...prev,
+                  [agent]: { ...prev[agent], connected: true },
+                  [other]: { ...prev[other], connected: false },
+                }));
+                send({ kind: "setAgent", agent, enabled: true });
+              }}
+              onDismiss={() => {
+                setConnectCtaAgents([]);
+                send({ kind: "dismissConnectCta" });
+              }}
+            />
+          </div>
+        );
+      })()}
+
       <LibraryGrid
         entries={library}
         currentHash={rom?.hash ?? null}
         onSwitchRom={(hash) => {
-          // Capture the running game's SRAM before the host triggers a
-          // reload — otherwise the in-progress session's last few seconds
-          // of play vanish from disk (still in IDBFS, but our portable
-          // mirror would be stale).
-          window.__standboyFlushSave?.();
-          send({ kind: "switchRom", hash });
+          // Clicking the active cover or any cover while nothing's running
+          // → no confirmation needed, just switch. Flush SRAM first so the
+          // running game's last few seconds aren't lost on reload.
+          if (!rom || rom.hash === hash) {
+            window.__standboyFlushSave?.();
+            send({ kind: "switchRom", hash });
+            return;
+          }
+          // A different game is mid-session — open the in-panel confirm.
+          // We don't flush yet; the user might cancel. The actual send
+          // happens in the modal's onConfirm.
+          setPendingSwitchHash(hash);
         }}
-        onAddRom={() => send({ kind: "menu", action: "loadRom" })}
+        onAddRom={() => {
+          // Same flush rationale as the Load ROM menu item — see renderAction.
+          window.__standboyFlushSave?.();
+          send({ kind: "menu", action: "loadRom" });
+        }}
       />
+
+      {pendingSwitchHash &&
+        rom &&
+        (() => {
+          const next = library.find((e) => e.hash === pendingSwitchHash);
+          if (!next) return null;
+          return (
+            <ConfirmModal
+              title={`Switch to ${next.displayName}?`}
+              body={`${rom.displayName} will stop. Your progress is saved.`}
+              confirmLabel="Switch"
+              onConfirm={() => {
+                const hash = pendingSwitchHash;
+                setPendingSwitchHash(null);
+                window.__standboyFlushSave?.();
+                send({ kind: "switchRom", hash });
+              }}
+              onCancel={() => setPendingSwitchHash(null)}
+            />
+          );
+        })()}
 
       {menuOpen && (
         <Menu

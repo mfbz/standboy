@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { writeFile, readFile } from "node:fs/promises";
+import { writeFile, readFile, access } from "node:fs/promises";
 import { log, logError, showLogs } from "./log";
 import { StandboyViewProvider } from "./view";
 import {
@@ -22,72 +22,53 @@ import {
   watchSentinel,
 } from "./agent";
 import { getAgentStatus, setExclusiveAgent } from "./hooks";
-import type { Agent, LibraryEntry, MenuAction, Rom } from "./messages";
+import type {
+  Agent,
+  AgentStatus,
+  LibraryEntry,
+  MenuAction,
+  Rom,
+} from "./messages";
 
 const COVER_FETCH_CONCURRENCY = 4;
 
 const FIRST_RUN_KEY = "standboy.firstRunCompleted";
+const CONNECT_CTA_DISMISSED_KEY = "standboy.connectCtaDismissed";
+const CLEANUP_TIP_SHOWN_KEY = "standboy.cleanupTipShown";
 
-// Active onboarding shown once per machine on fresh install. Auto-opens
-// the panel, then a modal dialog offering to connect detected agents.
-// VSCode has no reliable uninstall lifecycle (microsoft/vscode#155561,
-// #102260), so we surface the cleanup convention upfront here rather
-// than via a passive tip after the user has already configured.
-async function maybeRunFirstRunSetup(
-  context: vscode.ExtensionContext,
-  postAgentStatus: () => Promise<void>
+// On fresh install just reveal the panel — the in-panel ConnectCta picks
+// up from here. We used to fire a modal welcome dialog with action buttons,
+// but that asked users to commit to writing hook config into ~/.claude or
+// ~/.cursor before they'd even seen what Standboy is, and the cleanup tip
+// landed before they had any concept of "connected."
+async function maybeRevealPanelOnFirstRun(
+  context: vscode.ExtensionContext
 ): Promise<void> {
   if (context.globalState.get<boolean>(FIRST_RUN_KEY)) return;
   await context.globalState.update(FIRST_RUN_KEY, true);
-
-  const status = await getAgentStatus();
-
-  // Existing user upgrading? They already have hooks installed — don't
-  // hijack their workflow with an onboarding dialog.
-  if (status.claude.connected || status.cursor.connected) return;
-
-  // Reveal the panel so the user sees what they just installed alongside
-  // the welcome dialog.
   void vscode.commands.executeCommand("standboy.gameView.focus");
+}
 
-  if (!status.claude.detected && !status.cursor.detected) {
-    void vscode.window.showInformationMessage("Welcome to Standboy!", {
-      modal: true,
-      detail:
-        "No AI agent detected on this system. Standboy still works as a manual Game Boy emulator. Install Claude Code or run Standboy inside Cursor to enable auto-show during AI activity.",
-    });
-    return;
-  }
-
-  const buttons: string[] = [];
-  if (status.claude.detected) buttons.push("Connect Claude Code");
-  if (status.cursor.detected) buttons.push("Connect Cursor");
-
-  const choice = await vscode.window.showInformationMessage(
-    "Welcome to Standboy!",
-    {
-      modal: true,
-      detail:
-        "Connect your AI agent to auto-show the panel during activity. You can change this anytime in the panel's Detection menu — and should disconnect there before uninstalling Standboy.",
-    },
-    ...buttons
-  );
-
-  let agent: Agent | null = null;
-  if (choice === "Connect Claude Code") agent = "claude";
-  else if (choice === "Connect Cursor") agent = "cursor";
-  if (!agent) return;
-
-  try {
-    await setExclusiveAgent(agent, true);
-    await postAgentStatus();
-    log("first-run: connected", agent);
-  } catch (err) {
-    logError("first-run: connect failed", agent, err);
-    void vscode.window.showErrorMessage(
-      `Standboy: couldn't connect ${agent}. You can try again from the Detection menu.`
-    );
-  }
+// Computes which agents to offer in the in-panel CTA. Returns one button
+// per detected-and-not-connected agent so the user picks which one to wire
+// up (running in Cursor *with* Claude Code installed is a real combo and
+// the choice is theirs to make). Returns an empty array when the CTA
+// should not show — either no agent is detected, one is already connected
+// (the feature is already configured), or the user dismissed the prompt.
+// Cursor comes first when both detected since `cursor.detected` only goes
+// true when the host process literally is Cursor — the user is presumably
+// using it as their primary agent.
+// Exported for testing.
+export function pickCtaAgents(
+  status: AgentStatus,
+  dismissed: boolean
+): Agent[] {
+  if (dismissed) return [];
+  if (status.claude.connected || status.cursor.connected) return [];
+  const agents: Agent[] = [];
+  if (status.cursor.detected) agents.push("cursor");
+  if (status.claude.detected) agents.push("claude");
+  return agents;
 }
 
 export async function activate(
@@ -201,9 +182,35 @@ export async function activate(
     try {
       const status = await getAgentStatus();
       provider.postMessage({ kind: "agentStatus", status });
+      const dismissed = context.globalState.get<boolean>(
+        CONNECT_CTA_DISMISSED_KEY,
+        false
+      );
+      const agents = pickCtaAgents(status, dismissed);
+      // Single line in Show logs makes "why isn't the CTA showing?" trivial
+      // to debug: status + dismissed + computed agents all on one row.
+      log(
+        "agentStatus",
+        JSON.stringify(status),
+        "ctaDismissed",
+        dismissed,
+        "ctaAgents",
+        JSON.stringify(agents)
+      );
+      provider.postMessage({ kind: "connectCta", agents });
     } catch (err) {
       logError("hooks: status read failed", err);
     }
+  }
+
+  // Fires the one-shot "disconnect before uninstalling" tip on the first
+  // successful connect from any flow (CTA button or Detection menu). We
+  // wait for actual connect — surfacing this before the user has any
+  // concept of "connected" makes the message rot in their working memory.
+  async function maybeShowCleanupTip(): Promise<void> {
+    if (context.globalState.get<boolean>(CLEANUP_TIP_SHOWN_KEY)) return;
+    await context.globalState.update(CLEANUP_TIP_SHOWN_KEY, true);
+    provider.postMessage({ kind: "cleanupTip" });
   }
 
   // Sends a coverUpdate message as each cover resolves so the grid fades art in progressively.
@@ -245,23 +252,31 @@ export async function activate(
   }
 
   async function loadAndPostRom(hash: string): Promise<boolean> {
-    const rom = await library.loadRom(hash);
-    if (!rom) return false;
+    const lib = await library.readLibrary();
+    const entry = lib.roms[hash];
+    if (!entry) return false;
+    const romPath = library.romFilePath(hash, entry.ext);
+    // Library index can outlive the file on disk (user wiped the folder,
+    // iCloud sync conflict, etc.). Fail silently rather than hand the
+    // webview a URI that would 404 on fetch.
+    try {
+      await access(romPath);
+    } catch {
+      return false;
+    }
+    const romUri = provider.asWebviewFileUri(romPath);
+    if (!romUri) return false;
+    const save = await library.readSave(hash);
     await library.touch(hash);
     currentRomHash = hash;
-    // Bytes serialised to number[] for the webview postMessage bridge —
-    // VSCode JSON-encodes between extension host and webview, and
-    // Uint8Array doesn't round-trip cleanly.
-    const lib = await library.readLibrary();
-    const entry = lib.roms[rom.hash];
     const message: { kind: "rom" } & Rom = {
       kind: "rom",
-      hash: rom.hash,
-      bytes: Array.from(rom.bytes),
-      ext: rom.ext,
-      name: rom.name,
-      displayName: friendlyName(entry?.canonicalName ?? rom.name),
-      save: rom.save ? Array.from(rom.save) : undefined,
+      hash,
+      romUri,
+      ext: entry.ext,
+      name: entry.name,
+      displayName: friendlyName(entry.canonicalName ?? entry.name),
+      save: save ? Array.from(save) : undefined,
     };
     provider.postMessage(message);
     // Touching changed lastPlayedAt order — refresh the grid.
@@ -271,12 +286,35 @@ export async function activate(
 
   async function loadRomAction(): Promise<void> {
     const hash = await pickAndImportRom(library, extensionRoot);
-    if (hash) {
+    if (!hash) return;
+    // Newly-imported ROM may not be in the libretro index — kick off the
+    // fetcher so any matchable cover lands within seconds.
+    void ensureCoversInBackground();
+
+    // No game running yet — EJS hasn't booted, so the boot effect in
+    // EmulatorHost will run on the next `rom` prop change. Direct path.
+    if (!currentRomHash) {
       await loadAndPostRom(hash);
-      // Newly-imported ROM may not be in the libretro index — kick off
-      // the fetcher so any matchable cover lands within seconds.
-      void ensureCoversInBackground();
+      return;
     }
+
+    // User picked the file they were already playing. addRom is idempotent
+    // and just bumped lastPlayedAt; refresh the grid for the new sort order
+    // but don't disturb the running game.
+    if (currentRomHash === hash) {
+      await postLibrary();
+      return;
+    }
+
+    // Different game already running. EmulatorJS has no clean teardown —
+    // same constraint as `switchRom` — so swapping the cartridge requires
+    // a full webview reload. `addRom` already set `lastPlayedHash` to the
+    // new hash, so the post-reload `ready` handler auto-resumes it AND
+    // re-posts the library. No need to post the library here — it'd be
+    // delivered to a webview that's about to reload it away. The webview
+    // flushes save before sending the menu action (see app.tsx), so the
+    // running game's last few seconds aren't lost.
+    provider.reload();
   }
 
   async function openLibraryFolderAction(): Promise<void> {
@@ -360,8 +398,18 @@ export async function activate(
       "Delete"
     );
     if (confirm !== "Delete") return;
+    const deletedRunning = currentRomHash === picked.hash;
     await library.deleteRom(picked.hash);
-    if (currentRomHash === picked.hash) currentRomHash = null;
+    if (deletedRunning) currentRomHash = null;
+    // Reload when we just deleted the running game — EmulatorJS keeps the
+    // ROM bytes in its Emscripten FS, so without a reload the emulator
+    // would silently keep playing the orphan (and a subsequent Load ROM
+    // would hit the !currentRomHash branch and likewise fail to swap).
+    // Same EJS-teardown constraint as switchRom / loadRomAction.
+    if (deletedRunning) {
+      provider.reload();
+      return;
+    }
     await postLibrary();
   }
 
@@ -392,6 +440,17 @@ export async function activate(
       provider.postMessage({ kind: "bindings", bindings: cfg.bindings });
       provider.postMessage({ kind: "autoShow", enabled: readAutoShow() });
       void postAgentStatus();
+      // Upgrade-cohort backfill: users who connected via the old install-time
+      // modal are already `connected=true` but predate the cleanupTipShown
+      // flag, so they'd never see the tip otherwise. Fire it once on first
+      // ready of the new version; `maybeShowCleanupTip` is one-shot, so
+      // returning users won't get it repeatedly.
+      void (async () => {
+        const status = await getAgentStatus();
+        if (status.claude.connected || status.cursor.connected) {
+          await maybeShowCleanupTip();
+        }
+      })();
       const lib = await library.readLibrary();
       if (lib.lastPlayedHash) await loadAndPostRom(lib.lastPlayedHash);
       // Backfill No-Intro canonical names for ROMs imported before the
@@ -421,6 +480,16 @@ export async function activate(
       // Same hash? Already playing — nothing to do, and triggering a
       // reload would needlessly destroy unsaved IDBFS state.
       if (msg.hash === currentRomHash) return;
+      const lib = await library.readLibrary();
+      const next = lib.roms[msg.hash];
+      if (!next) return;
+      // Confirmation lives in the webview now (ConfirmModal) — see
+      // app.tsx onSwitchRom. We used to fire a VSCode `modal:true`
+      // MessageBox here, but those take over the entire editor window
+      // for an action that's scoped to one panel. The webview already
+      // flushed the running session's save before posting switchRom, so
+      // by the time we land here the user has confirmed and the bytes
+      // are persisted. Reaching this point = user said yes.
       // Persist the user's intent so the post-reload `ready` handler
       // picks the new ROM via `lastPlayedHash`. We don't post a `rom`
       // message: the iframe would set React state to the new ROM but
@@ -428,7 +497,7 @@ export async function activate(
       // and the next save flush would write the old game's SRAM under
       // the new hash — corrupting the new game's save file.
       await library.touch(msg.hash);
-      provider.postMessage({ kind: "reload" });
+      provider.reload();
     }
     if (msg.kind === "saveBindings") {
       try {
@@ -438,15 +507,37 @@ export async function activate(
       }
     }
     if (msg.kind === "setAgent") {
+      let ok = false;
       try {
         await setExclusiveAgent(msg.agent, msg.enabled);
+        ok = true;
       } catch (err) {
         logError("hooks: setAgent failed", msg.agent, err);
         void vscode.window.showErrorMessage(
           `Standboy: failed to ${msg.enabled ? "connect" : "disconnect"} ${msg.agent}. Check the logs.`
         );
       }
+      // Ordering is load-bearing here, do not reshuffle:
+      //   1. Persist `connectCtaDismissed=true` so `postAgentStatus` below
+      //      recomputes the CTA target as an empty array. Without this the
+      //      webview could see `connectCta` with non-empty agents re-asserted
+      //      right after it optimistically hid the CTA.
+      //   2. `postAgentStatus` flushes both the new status AND the recomputed
+      //      `connectCta:{agents:[]}` to the webview.
+      //   3. ONLY THEN post `cleanupTip`, so the toast (which preempts the
+      //      CTA in the render slot) lands after the CTA has cleared. If we
+      //      posted the tip first, the webview would render the toast while
+      //      the CTA was still its current state — but then the empty
+      //      `connectCta` would arrive in the same render cycle and there'd
+      //      be a one-frame flicker. Keeping the order matches the FIFO
+      //      postMessage delivery contract.
+      // First-connect also retires the CTA permanently — the user has
+      // discovered the feature, so a later disconnect shouldn't re-prompt.
+      if (ok && msg.enabled) {
+        await context.globalState.update(CONNECT_CTA_DISMISSED_KEY, true);
+      }
       await postAgentStatus();
+      if (ok && msg.enabled) await maybeShowCleanupTip();
     }
     if (msg.kind === "setAutoShow") {
       try {
@@ -456,6 +547,17 @@ export async function activate(
       }
       // onAutoShowChange echoes the persisted value back to the webview,
       // so we don't post here — avoids a stale-state race if the write fails.
+    }
+    if (msg.kind === "dismissConnectCta") {
+      // We deliberately do NOT fire the cleanup tip here. The tip warns the
+      // user to disconnect before uninstalling — meaningless if they never
+      // connected in the first place. If they later connect via the menu,
+      // the setAgent handler above takes care of it.
+      await context.globalState.update(CONNECT_CTA_DISMISSED_KEY, true);
+      // Re-post so the CTA hides immediately. postAgentStatus computes the
+      // CTA target from (status + dismissed flag), so the next call will
+      // correctly send `agent: null`.
+      await postAgentStatus();
     }
   };
 
@@ -552,7 +654,7 @@ export async function activate(
     });
   });
 
-  void maybeRunFirstRunSetup(context, postAgentStatus);
+  void maybeRevealPanelOnFirstRun(context);
 }
 
 export function deactivate(): void {
