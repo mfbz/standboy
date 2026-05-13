@@ -429,6 +429,29 @@ export async function activate(
       // Same hash? Already playing — nothing to do, and triggering a
       // reload would needlessly destroy unsaved IDBFS state.
       if (msg.hash === currentRomHash) return;
+      const lib = await library.readLibrary();
+      const next = lib.roms[msg.hash];
+      if (!next) return;
+      // If a game is currently running, confirm before reloading. The
+      // webview already flushed the running session's save before posting
+      // switchRom (see app.tsx onSwitchRom), so cancelling here is
+      // non-destructive — the user just keeps playing the current ROM.
+      if (currentRomHash && currentRomHash !== msg.hash) {
+        const current = lib.roms[currentRomHash];
+        const nextName = friendlyName(next.canonicalName ?? next.name);
+        const currentName = current
+          ? friendlyName(current.canonicalName ?? current.name)
+          : "the current game";
+        const choice = await vscode.window.showWarningMessage(
+          `Switch to ${nextName}?`,
+          {
+            modal: true,
+            detail: `${currentName} will stop. Your progress is saved.`,
+          },
+          "Switch"
+        );
+        if (choice !== "Switch") return;
+      }
       // Persist the user's intent so the post-reload `ready` handler
       // picks the new ROM via `lastPlayedHash`. We don't post a `rom`
       // message: the iframe would set React state to the new ROM but

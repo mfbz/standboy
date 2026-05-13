@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
-import { Play } from "lucide-react";
 import type { LibraryEntry } from "../../src/messages";
 
 interface Props {
@@ -34,7 +33,7 @@ export function CoverCard({ entry, active, onClick }: Props): ReactElement {
           marginBottom: "8px",
           background: "linear-gradient(135deg, var(--sb-c1), var(--sb-c0))",
           boxShadow: active
-            ? "0 0 0 2px var(--sb-c2), 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(148,227,68,0.18)"
+            ? "0 0 0 2px var(--sb-c2), 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px color-mix(in srgb, var(--sb-c2) 22%, transparent)"
             : "0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.18)",
           transition:
             "transform 200ms cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 200ms ease-out",
@@ -97,38 +96,6 @@ export function CoverCard({ entry, active, onClick }: Props): ReactElement {
         >
           {entry.ext}
         </span>
-
-        {active && (
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(180deg, transparent 50%, rgba(51,44,80,0.7) 100%)",
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "flex-start",
-              padding: "8px",
-            }}
-          >
-            <span
-              style={{
-                background: "var(--sb-c2)",
-                color: "var(--sb-c0)",
-                width: "22px",
-                height: "22px",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 2px 8px rgba(148,227,68,0.5)",
-              }}
-            >
-              <Play size={11} fill="currentColor" strokeWidth={0} />
-            </span>
-          </div>
-        )}
       </div>
 
       <span
