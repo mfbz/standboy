@@ -54,11 +54,57 @@ describe("hooks per-agent API", () => {
       await readFile(path.join(home, ".claude", "settings.json"), "utf8")
     );
     expect(parsed.hooks.UserPromptSubmit).toHaveLength(1);
+    const promptCmd = parsed.hooks.UserPromptSubmit[0].hooks[0].command;
+    expect(promptCmd).toContain("marker.cjs");
+    expect(promptCmd).toContain("prompt");
+    expect(parsed.hooks.PreToolUse).toHaveLength(1);
+    expect(parsed.hooks.PreToolUse[0].hooks[0].command).toContain("tool");
+    expect(parsed.hooks.Stop).toHaveLength(1);
+    expect(parsed.hooks.Stop[0].hooks[0].command).toContain("stop");
+  });
+
+  it("setClaudeHooks(true) migrates legacy `start` commands to prompt/tool split", async () => {
+    await mkdir(path.join(home, ".claude", "projects"), { recursive: true });
+    const markerPath = path.join(home, ".standboy", "marker.cjs");
+    // Mimic a hook config written by an older Standboy build — single
+    // `start` command on both UserPromptSubmit and PreToolUse.
+    const legacy = {
+      hooks: {
+        UserPromptSubmit: [
+          {
+            hooks: [{ type: "command", command: `node "${markerPath}" start` }],
+          },
+        ],
+        PreToolUse: [
+          {
+            hooks: [{ type: "command", command: `node "${markerPath}" start` }],
+          },
+        ],
+        Stop: [
+          {
+            hooks: [{ type: "command", command: `node "${markerPath}" stop` }],
+          },
+        ],
+      },
+    };
+    await writeFile(
+      path.join(home, ".claude", "settings.json"),
+      JSON.stringify(legacy, null, 2)
+    );
+
+    const { setClaudeHooks } = await import("./hooks");
+    await setClaudeHooks(true);
+
+    const parsed = JSON.parse(
+      await readFile(path.join(home, ".claude", "settings.json"), "utf8")
+    );
+    expect(parsed.hooks.UserPromptSubmit).toHaveLength(1);
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain(
-      "marker.cjs"
+      "prompt"
     );
     expect(parsed.hooks.PreToolUse).toHaveLength(1);
-    expect(parsed.hooks.Stop).toHaveLength(1);
+    expect(parsed.hooks.PreToolUse[0].hooks[0].command).toContain("tool");
+    expect(parsed.hooks.PreToolUse[0].hooks[0].command).not.toContain("start");
   });
 
   it("merges into an existing settings.json without losing user config", async () => {
@@ -121,6 +167,40 @@ describe("hooks per-agent API", () => {
     expect(parsed.hooks.Stop).toHaveLength(1);
   });
 
+  it("setClaudeHooks(true) re-runs skip the disk write when nothing changed", async () => {
+    // Auto-migration on activate calls setClaudeHooks(true) on every reload
+    // when claude is connected. Without the no-op short-circuit, the
+    // settings.json mtime would churn on every VSCode reload.
+    await mkdir(path.join(home, ".claude", "projects"), { recursive: true });
+
+    const { setClaudeHooks } = await import("./hooks");
+    await setClaudeHooks(true);
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const mtimeBefore = (await import("node:fs/promises")).stat(settingsPath);
+    const before = (await mtimeBefore).mtimeMs;
+
+    // Wait a bit so any new write would be visible in mtime.
+    await new Promise((r) => setTimeout(r, 20));
+    await setClaudeHooks(true);
+    const after = (await (await import("node:fs/promises")).stat(settingsPath))
+      .mtimeMs;
+    expect(after).toBe(before);
+  });
+
+  it("setClaudeHooks(true) refuses to overwrite a corrupt settings.json", async () => {
+    await mkdir(path.join(home, ".claude", "projects"), { recursive: true });
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    // Half-written file (e.g. user mid-edit, partial save, merge conflict).
+    await writeFile(settingsPath, '{"model": "claude-sonnet-4-7"');
+
+    const { setClaudeHooks } = await import("./hooks");
+    await expect(setClaudeHooks(true)).rejects.toThrow(/isn't valid JSON/);
+
+    // Original file is untouched — no data lost.
+    const raw = await readFile(settingsPath, "utf8");
+    expect(raw).toBe('{"model": "claude-sonnet-4-7"');
+  });
+
   it("setClaudeHooks(false) strips only our entries, leaves the user's intact", async () => {
     await mkdir(path.join(home, ".claude", "projects"), { recursive: true });
     const userSettings = {
@@ -165,7 +245,7 @@ describe("hooks per-agent API", () => {
     );
     expect(parsed.version).toBe(1);
     expect(parsed.hooks.beforeSubmitPrompt.command).toContain("marker.cjs");
-    expect(parsed.hooks.beforeSubmitPrompt.command).toContain("start");
+    expect(parsed.hooks.beforeSubmitPrompt.command).toContain("prompt");
     expect(parsed.hooks.afterAgentResponse.command).toContain("stop");
     expect(parsed.hooks.sessionEnd.command).toContain("stop");
   });
