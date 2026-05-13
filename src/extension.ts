@@ -286,12 +286,35 @@ export async function activate(
 
   async function loadRomAction(): Promise<void> {
     const hash = await pickAndImportRom(library, extensionRoot);
-    if (hash) {
+    if (!hash) return;
+    // Newly-imported ROM may not be in the libretro index — kick off the
+    // fetcher so any matchable cover lands within seconds.
+    void ensureCoversInBackground();
+
+    // No game running yet — EJS hasn't booted, so the boot effect in
+    // EmulatorHost will run on the next `rom` prop change. Direct path.
+    if (!currentRomHash) {
       await loadAndPostRom(hash);
-      // Newly-imported ROM may not be in the libretro index — kick off
-      // the fetcher so any matchable cover lands within seconds.
-      void ensureCoversInBackground();
+      return;
     }
+
+    // User picked the file they were already playing. addRom is idempotent
+    // and just bumped lastPlayedAt; refresh the grid for the new sort order
+    // but don't disturb the running game.
+    if (currentRomHash === hash) {
+      await postLibrary();
+      return;
+    }
+
+    // Different game already running. EmulatorJS has no clean teardown —
+    // same constraint as `switchRom` — so swapping the cartridge requires
+    // a full webview reload. `addRom` already set `lastPlayedHash` to the
+    // new hash, so the post-reload `ready` handler auto-resumes it AND
+    // re-posts the library. No need to post the library here — it'd be
+    // delivered to a webview that's about to reload it away. The webview
+    // flushes save before sending the menu action (see app.tsx), so the
+    // running game's last few seconds aren't lost.
+    provider.postMessage({ kind: "reload" });
   }
 
   async function openLibraryFolderAction(): Promise<void> {
@@ -375,8 +398,18 @@ export async function activate(
       "Delete"
     );
     if (confirm !== "Delete") return;
+    const deletedRunning = currentRomHash === picked.hash;
     await library.deleteRom(picked.hash);
-    if (currentRomHash === picked.hash) currentRomHash = null;
+    if (deletedRunning) currentRomHash = null;
+    // Reload when we just deleted the running game — EmulatorJS keeps the
+    // ROM bytes in its Emscripten FS, so without a reload the emulator
+    // would silently keep playing the orphan (and a subsequent Load ROM
+    // would hit the !currentRomHash branch and likewise fail to swap).
+    // Same EJS-teardown constraint as switchRom / loadRomAction.
+    if (deletedRunning) {
+      provider.postMessage({ kind: "reload" });
+      return;
+    }
     await postLibrary();
   }
 

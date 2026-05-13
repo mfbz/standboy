@@ -511,12 +511,18 @@ function Menu({
       key={spec.action}
       spec={spec}
       onClick={() => {
-        // Force-capture SRAM before any disk-touching save action.
+        // Force-capture SRAM ahead of actions that depend on a fresh save:
+        // - exportSave / importSave: host reads the file from disk.
+        // - loadRom: importing a different ROM triggers a webview reload,
+        //   which would otherwise lose the current session's last seconds.
         // The save message rides ahead of the menu message in the same
-        // channel, and the extension's serialized queue guarantees the
-        // write completes before the export/import command reads the
-        // save file from disk.
-        if (spec.action === "exportSave" || spec.action === "importSave") {
+        // channel, and the host's serialized queue guarantees the write
+        // completes before the menu action runs.
+        if (
+          spec.action === "exportSave" ||
+          spec.action === "importSave" ||
+          spec.action === "loadRom"
+        ) {
           window.__standboyFlushSave?.();
         }
         send({ kind: "menu", action: spec.action });
@@ -1079,7 +1085,11 @@ export function App(): ReactElement {
           window.__standboyFlushSave?.();
           send({ kind: "switchRom", hash });
         }}
-        onAddRom={() => send({ kind: "menu", action: "loadRom" })}
+        onAddRom={() => {
+          // Same flush rationale as the Load ROM menu item — see renderAction.
+          window.__standboyFlushSave?.();
+          send({ kind: "menu", action: "loadRom" });
+        }}
       />
 
       {menuOpen && (
