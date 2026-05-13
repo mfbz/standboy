@@ -20,6 +20,7 @@ import { EmulatorHost } from "./components/emulator-host";
 import { LibraryGrid } from "./components/library-grid";
 import { ConnectCta } from "./components/connect-cta";
 import { CleanupTipToast } from "./components/cleanup-tip-toast";
+import { ConfirmModal } from "./components/confirm-modal";
 import type {
   ActivityState,
   Agent,
@@ -749,6 +750,13 @@ export function App(): ReactElement {
   // cleanly even if a previous instance hadn't yet finished.
   const [connectCtaAgents, setConnectCtaAgents] = useState<Agent[]>([]);
   const [cleanupTipKey, setCleanupTipKey] = useState<number | null>(null);
+  // Hash of the ROM the user just clicked while a *different* game was
+  // running. Triggers an in-panel confirm modal — clicking a cover is a
+  // low-friction action and we don't want a typo'd click to interrupt
+  // mid-game. Null = no pending switch.
+  const [pendingSwitchHash, setPendingSwitchHash] = useState<string | null>(
+    null
+  );
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -874,6 +882,12 @@ export function App(): ReactElement {
   // processed exactly once, by us.
   useEffect(() => {
     if (listening) return;
+    // Suspend in-game input while the switch-confirm modal is open. The
+    // modal's capture-phase Enter handler runs *after* this one (its
+    // useEffect mounts later), so without this gate the default Enter→Start
+    // binding would pulse Start on the outgoing game before the modal
+    // closes — visible if the user happened to be on a save screen.
+    if (pendingSwitchHash) return;
     const press = (e: KeyboardEvent, value: 0 | 1) => {
       if (e.repeat) return;
       const incoming = normalizeKey(e.key);
@@ -898,7 +912,17 @@ export function App(): ReactElement {
       window.removeEventListener("keydown", onDown, { capture: true });
       window.removeEventListener("keyup", onUp, { capture: true });
     };
-  }, [bindings, listening]);
+  }, [bindings, listening, pendingSwitchHash]);
+
+  useEffect(() => {
+    // Clear a stale pending switch if the running ROM or its target entry
+    // vanishes (e.g., reload race re-emits `rom` as null, or the entry got
+    // deleted out from under us). Without this, the modal could re-pop
+    // after a transient null when both come back.
+    if (!pendingSwitchHash) return;
+    const stillValid = rom && library.some((e) => e.hash === pendingSwitchHash);
+    if (!stillValid) setPendingSwitchHash(null);
+  }, [rom, library, pendingSwitchHash]);
 
   const currentEntry = rom ? library.find((e) => e.hash === rom.hash) : null;
 
@@ -1078,12 +1102,18 @@ export function App(): ReactElement {
         entries={library}
         currentHash={rom?.hash ?? null}
         onSwitchRom={(hash) => {
-          // Capture the running game's SRAM before the host triggers a
-          // reload — otherwise the in-progress session's last few seconds
-          // of play vanish from disk (still in IDBFS, but our portable
-          // mirror would be stale).
-          window.__standboyFlushSave?.();
-          send({ kind: "switchRom", hash });
+          // Clicking the active cover or any cover while nothing's running
+          // → no confirmation needed, just switch. Flush SRAM first so the
+          // running game's last few seconds aren't lost on reload.
+          if (!rom || rom.hash === hash) {
+            window.__standboyFlushSave?.();
+            send({ kind: "switchRom", hash });
+            return;
+          }
+          // A different game is mid-session — open the in-panel confirm.
+          // We don't flush yet; the user might cancel. The actual send
+          // happens in the modal's onConfirm.
+          setPendingSwitchHash(hash);
         }}
         onAddRom={() => {
           // Same flush rationale as the Load ROM menu item — see renderAction.
@@ -1091,6 +1121,27 @@ export function App(): ReactElement {
           send({ kind: "menu", action: "loadRom" });
         }}
       />
+
+      {pendingSwitchHash &&
+        rom &&
+        (() => {
+          const next = library.find((e) => e.hash === pendingSwitchHash);
+          if (!next) return null;
+          return (
+            <ConfirmModal
+              title={`Switch to ${next.displayName}?`}
+              body={`${rom.displayName} will stop. Your progress is saved.`}
+              confirmLabel="Switch"
+              onConfirm={() => {
+                const hash = pendingSwitchHash;
+                setPendingSwitchHash(null);
+                window.__standboyFlushSave?.();
+                send({ kind: "switchRom", hash });
+              }}
+              onCancel={() => setPendingSwitchHash(null)}
+            />
+          );
+        })()}
 
       {menuOpen && (
         <Menu

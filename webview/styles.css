@@ -112,3 +112,29 @@ body {
     transform: translateY(0);
   }
 }
+
+/*
+ * In-panel modal backdrop + dialog entry. Backdrop fades; the dialog
+ * itself pops up with a subtle scale + lift so it reads as "presented"
+ * rather than "appeared." Used by ConfirmModal — replaces the native
+ * VSCode `modal:true` MessageBox that would otherwise take over the
+ * entire editor window.
+ */
+@keyframes sb-backdrop-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sb-modal-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
