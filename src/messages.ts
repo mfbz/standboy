@@ -81,6 +81,16 @@ export type HostToWebview =
   | { kind: "bindings"; bindings: KeyBindings }
   | { kind: "agentStatus"; status: AgentStatus }
   | { kind: "autoShow"; enabled: boolean }
+  // In-panel onboarding CTA. `agent` names which agent to promote (we
+  // suggest the most likely one — Cursor when running inside Cursor, else
+  // Claude Code). `null` hides the CTA. Mutually exclusive with `cleanupTip`
+  // in the webview render slot — the toast preempts the CTA.
+  | { kind: "connectCta"; agent: Agent | null }
+  // One-shot info nudge shown the first time the user connects an agent —
+  // surfaces the "disconnect before uninstalling" convention at the moment
+  // it becomes meaningful. Always paired with a preceding `connectCta:null`
+  // so the CTA clears before the toast renders.
+  | { kind: "cleanupTip" }
   // Hard reload — the only reliable way to swap the running ROM, since
   // EmulatorJS has no clean teardown.
   | { kind: "reload" }
@@ -102,4 +112,5 @@ export type WebviewToHost =
   | { kind: "switchRom"; hash: string }
   | { kind: "saveBindings"; bindings: KeyBindings }
   | { kind: "setAgent"; agent: Agent; enabled: boolean }
-  | { kind: "setAutoShow"; enabled: boolean };
+  | { kind: "setAutoShow"; enabled: boolean }
+  | { kind: "dismissConnectCta" };

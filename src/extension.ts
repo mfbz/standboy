@@ -22,72 +22,48 @@ import {
   watchSentinel,
 } from "./agent";
 import { getAgentStatus, setExclusiveAgent } from "./hooks";
-import type { Agent, LibraryEntry, MenuAction, Rom } from "./messages";
+import type {
+  Agent,
+  AgentStatus,
+  LibraryEntry,
+  MenuAction,
+  Rom,
+} from "./messages";
 
 const COVER_FETCH_CONCURRENCY = 4;
 
 const FIRST_RUN_KEY = "standboy.firstRunCompleted";
+const CONNECT_CTA_DISMISSED_KEY = "standboy.connectCtaDismissed";
+const CLEANUP_TIP_SHOWN_KEY = "standboy.cleanupTipShown";
 
-// Active onboarding shown once per machine on fresh install. Auto-opens
-// the panel, then a modal dialog offering to connect detected agents.
-// VSCode has no reliable uninstall lifecycle (microsoft/vscode#155561,
-// #102260), so we surface the cleanup convention upfront here rather
-// than via a passive tip after the user has already configured.
-async function maybeRunFirstRunSetup(
-  context: vscode.ExtensionContext,
-  postAgentStatus: () => Promise<void>
+// On fresh install just reveal the panel — the in-panel ConnectCta picks
+// up from here. We used to fire a modal welcome dialog with action buttons,
+// but that asked users to commit to writing hook config into ~/.claude or
+// ~/.cursor before they'd even seen what Standboy is, and the cleanup tip
+// landed before they had any concept of "connected."
+async function maybeRevealPanelOnFirstRun(
+  context: vscode.ExtensionContext
 ): Promise<void> {
   if (context.globalState.get<boolean>(FIRST_RUN_KEY)) return;
   await context.globalState.update(FIRST_RUN_KEY, true);
-
-  const status = await getAgentStatus();
-
-  // Existing user upgrading? They already have hooks installed — don't
-  // hijack their workflow with an onboarding dialog.
-  if (status.claude.connected || status.cursor.connected) return;
-
-  // Reveal the panel so the user sees what they just installed alongside
-  // the welcome dialog.
   void vscode.commands.executeCommand("standboy.gameView.focus");
+}
 
-  if (!status.claude.detected && !status.cursor.detected) {
-    void vscode.window.showInformationMessage("Welcome to Standboy!", {
-      modal: true,
-      detail:
-        "No AI agent detected on this system. Standboy still works as a manual Game Boy emulator. Install Claude Code or run Standboy inside Cursor to enable auto-show during AI activity.",
-    });
-    return;
-  }
-
-  const buttons: string[] = [];
-  if (status.claude.detected) buttons.push("Connect Claude Code");
-  if (status.cursor.detected) buttons.push("Connect Cursor");
-
-  const choice = await vscode.window.showInformationMessage(
-    "Welcome to Standboy!",
-    {
-      modal: true,
-      detail:
-        "Connect your AI agent to auto-show the panel during activity. You can change this anytime in the panel's Detection menu — and should disconnect there before uninstalling Standboy.",
-    },
-    ...buttons
-  );
-
-  let agent: Agent | null = null;
-  if (choice === "Connect Claude Code") agent = "claude";
-  else if (choice === "Connect Cursor") agent = "cursor";
-  if (!agent) return;
-
-  try {
-    await setExclusiveAgent(agent, true);
-    await postAgentStatus();
-    log("first-run: connected", agent);
-  } catch (err) {
-    logError("first-run: connect failed", agent, err);
-    void vscode.window.showErrorMessage(
-      `Standboy: couldn't connect ${agent}. You can try again from the Detection menu.`
-    );
-  }
+// Picks which agent to promote in the in-panel CTA. Cursor wins when the
+// user is running inside Cursor (its detection signal is `appName`, so a
+// detected=true means the host process *is* Cursor); else Claude Code if
+// its config dir exists. Returns null when the CTA should not show —
+// either no agent is detected, one is already connected, or the user
+// dismissed it. Exported for testing.
+export function pickCtaAgent(
+  status: AgentStatus,
+  dismissed: boolean
+): Agent | null {
+  if (dismissed) return null;
+  if (status.claude.connected || status.cursor.connected) return null;
+  if (status.cursor.detected) return "cursor";
+  if (status.claude.detected) return "claude";
+  return null;
 }
 
 export async function activate(
@@ -201,9 +177,27 @@ export async function activate(
     try {
       const status = await getAgentStatus();
       provider.postMessage({ kind: "agentStatus", status });
+      const dismissed = context.globalState.get<boolean>(
+        CONNECT_CTA_DISMISSED_KEY,
+        false
+      );
+      provider.postMessage({
+        kind: "connectCta",
+        agent: pickCtaAgent(status, dismissed),
+      });
     } catch (err) {
       logError("hooks: status read failed", err);
     }
+  }
+
+  // Fires the one-shot "disconnect before uninstalling" tip on the first
+  // successful connect from any flow (CTA button or Detection menu). We
+  // wait for actual connect — surfacing this before the user has any
+  // concept of "connected" makes the message rot in their working memory.
+  async function maybeShowCleanupTip(): Promise<void> {
+    if (context.globalState.get<boolean>(CLEANUP_TIP_SHOWN_KEY)) return;
+    await context.globalState.update(CLEANUP_TIP_SHOWN_KEY, true);
+    provider.postMessage({ kind: "cleanupTip" });
   }
 
   // Sends a coverUpdate message as each cover resolves so the grid fades art in progressively.
@@ -400,6 +394,17 @@ export async function activate(
       provider.postMessage({ kind: "bindings", bindings: cfg.bindings });
       provider.postMessage({ kind: "autoShow", enabled: readAutoShow() });
       void postAgentStatus();
+      // Upgrade-cohort backfill: users who connected via the old install-time
+      // modal are already `connected=true` but predate the cleanupTipShown
+      // flag, so they'd never see the tip otherwise. Fire it once on first
+      // ready of the new version; `maybeShowCleanupTip` is one-shot, so
+      // returning users won't get it repeatedly.
+      void (async () => {
+        const status = await getAgentStatus();
+        if (status.claude.connected || status.cursor.connected) {
+          await maybeShowCleanupTip();
+        }
+      })();
       const lib = await library.readLibrary();
       if (lib.lastPlayedHash) await loadAndPostRom(lib.lastPlayedHash);
       // Backfill No-Intro canonical names for ROMs imported before the
@@ -469,15 +474,37 @@ export async function activate(
       }
     }
     if (msg.kind === "setAgent") {
+      let ok = false;
       try {
         await setExclusiveAgent(msg.agent, msg.enabled);
+        ok = true;
       } catch (err) {
         logError("hooks: setAgent failed", msg.agent, err);
         void vscode.window.showErrorMessage(
           `Standboy: failed to ${msg.enabled ? "connect" : "disconnect"} ${msg.agent}. Check the logs.`
         );
       }
+      // Ordering is load-bearing here, do not reshuffle:
+      //   1. Persist `connectCtaDismissed=true` so `postAgentStatus` below
+      //      recomputes the CTA target as null. Without this the webview
+      //      could see `connectCta:<agent>` re-asserted right after it
+      //      optimistically hid the CTA.
+      //   2. `postAgentStatus` flushes both the new status AND the recomputed
+      //      `connectCta:null` to the webview.
+      //   3. ONLY THEN post `cleanupTip`, so the toast (which preempts the
+      //      CTA in the render slot) lands after the CTA has cleared. If we
+      //      posted the tip first, the webview would render the toast while
+      //      the CTA was still its current state — but then connectCta:null
+      //      would arrive in the same render cycle and there'd be a one-
+      //      frame flicker. Keeping the order matches the FIFO postMessage
+      //      delivery contract.
+      // First-connect also retires the CTA permanently — the user has
+      // discovered the feature, so a later disconnect shouldn't re-prompt.
+      if (ok && msg.enabled) {
+        await context.globalState.update(CONNECT_CTA_DISMISSED_KEY, true);
+      }
       await postAgentStatus();
+      if (ok && msg.enabled) await maybeShowCleanupTip();
     }
     if (msg.kind === "setAutoShow") {
       try {
@@ -487,6 +514,17 @@ export async function activate(
       }
       // onAutoShowChange echoes the persisted value back to the webview,
       // so we don't post here — avoids a stale-state race if the write fails.
+    }
+    if (msg.kind === "dismissConnectCta") {
+      // We deliberately do NOT fire the cleanup tip here. The tip warns the
+      // user to disconnect before uninstalling — meaningless if they never
+      // connected in the first place. If they later connect via the menu,
+      // the setAgent handler above takes care of it.
+      await context.globalState.update(CONNECT_CTA_DISMISSED_KEY, true);
+      // Re-post so the CTA hides immediately. postAgentStatus computes the
+      // CTA target from (status + dismissed flag), so the next call will
+      // correctly send `agent: null`.
+      await postAgentStatus();
     }
   };
 
@@ -583,7 +621,7 @@ export async function activate(
     });
   });
 
-  void maybeRunFirstRunSetup(context, postAgentStatus);
+  void maybeRevealPanelOnFirstRun(context);
 }
 
 export function deactivate(): void {
