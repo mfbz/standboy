@@ -41,13 +41,15 @@ export interface LibraryEntry {
   coverUri: string | null;
 }
 
-// `bytes` is `number[]` because Uint8Array doesn't round-trip cleanly
-// across VSCode's postMessage JSON layer — it becomes `{0:b0, 1:b1, ...}`
-// and downstream `Blob` falls back to `String()` → "[object Object]".
-// Sender: Array.from(uint8). Receiver: new Uint8Array(numbers).
+// ROM bytes are NOT shipped through postMessage — a 32MB GBA ROM serialised
+// as Array.from(uint8) blows up into a ~128MB smi array plus a JSON string
+// of similar size, which can OOM the extension host. Instead we hand the
+// webview a `vscode-webview://` URI to the file under <libraryRoot>/roms/
+// and let it fetch the bytes itself. Saves stay inline — they top out at
+// ~128KB so postMessage handles them fine.
 export interface Rom {
   hash: string;
-  bytes: number[];
+  romUri: string;
   ext: "gb" | "gbc" | "gba";
   name: string;
   displayName: string;

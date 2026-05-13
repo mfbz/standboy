@@ -81,6 +81,24 @@ describe("Library", () => {
     expect(await lib.loadRom("0000000000000000")).toBeNull();
   });
 
+  it("loadRom returns null when the index entry outlives the file", async () => {
+    const hash = await lib.addRom(new Uint8Array([1, 2, 3]), "gb", "x.gb");
+    await rm(join(root, "roms", `${hash}.gb`));
+    expect(await lib.loadRom(hash)).toBeNull();
+  });
+
+  it("romFilePath returns <root>/roms/<hash>.<ext>", () => {
+    expect(lib.romFilePath("deadbeef", "gb")).toBe(
+      join(root, "roms", "deadbeef.gb")
+    );
+    expect(lib.romFilePath("deadbeef", "gbc")).toBe(
+      join(root, "roms", "deadbeef.gbc")
+    );
+    expect(lib.romFilePath("deadbeef", "gba")).toBe(
+      join(root, "roms", "deadbeef.gba")
+    );
+  });
+
   it("deleteRom removes the ROM file, save file, and index entry", async () => {
     const hash = await lib.addRom(new Uint8Array([7]), "gba", "c.gba");
     await lib.writeSave(hash, new Uint8Array([8, 9]));

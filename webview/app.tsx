@@ -753,7 +753,7 @@ export function App(): ReactElement {
         case "rom":
           setRom({
             hash: msg.hash,
-            bytes: msg.bytes,
+            romUri: msg.romUri,
             ext: msg.ext,
             name: msg.name,
             displayName: msg.displayName,

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { writeFile, readFile } from "node:fs/promises";
+import { writeFile, readFile, access } from "node:fs/promises";
 import { log, logError, showLogs } from "./log";
 import { StandboyViewProvider } from "./view";
 import {
@@ -245,23 +245,31 @@ export async function activate(
   }
 
   async function loadAndPostRom(hash: string): Promise<boolean> {
-    const rom = await library.loadRom(hash);
-    if (!rom) return false;
+    const lib = await library.readLibrary();
+    const entry = lib.roms[hash];
+    if (!entry) return false;
+    const romPath = library.romFilePath(hash, entry.ext);
+    // Library index can outlive the file on disk (user wiped the folder,
+    // iCloud sync conflict, etc.). Fail silently rather than hand the
+    // webview a URI that would 404 on fetch.
+    try {
+      await access(romPath);
+    } catch {
+      return false;
+    }
+    const romUri = provider.asWebviewFileUri(romPath);
+    if (!romUri) return false;
+    const save = await library.readSave(hash);
     await library.touch(hash);
     currentRomHash = hash;
-    // Bytes serialised to number[] for the webview postMessage bridge —
-    // VSCode JSON-encodes between extension host and webview, and
-    // Uint8Array doesn't round-trip cleanly.
-    const lib = await library.readLibrary();
-    const entry = lib.roms[rom.hash];
     const message: { kind: "rom" } & Rom = {
       kind: "rom",
-      hash: rom.hash,
-      bytes: Array.from(rom.bytes),
-      ext: rom.ext,
-      name: rom.name,
-      displayName: friendlyName(entry?.canonicalName ?? rom.name),
-      save: rom.save ? Array.from(rom.save) : undefined,
+      hash,
+      romUri,
+      ext: entry.ext,
+      name: entry.name,
+      displayName: friendlyName(entry.canonicalName ?? entry.name),
+      save: save ? Array.from(save) : undefined,
     };
     provider.postMessage(message);
     // Touching changed lastPlayedAt order — refresh the grid.
