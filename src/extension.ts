@@ -49,21 +49,26 @@ async function maybeRevealPanelOnFirstRun(
   void vscode.commands.executeCommand("standboy.gameView.focus");
 }
 
-// Picks which agent to promote in the in-panel CTA. Cursor wins when the
-// user is running inside Cursor (its detection signal is `appName`, so a
-// detected=true means the host process *is* Cursor); else Claude Code if
-// its config dir exists. Returns null when the CTA should not show —
-// either no agent is detected, one is already connected, or the user
-// dismissed it. Exported for testing.
-export function pickCtaAgent(
+// Computes which agents to offer in the in-panel CTA. Returns one button
+// per detected-and-not-connected agent so the user picks which one to wire
+// up (running in Cursor *with* Claude Code installed is a real combo and
+// the choice is theirs to make). Returns an empty array when the CTA
+// should not show — either no agent is detected, one is already connected
+// (the feature is already configured), or the user dismissed the prompt.
+// Cursor comes first when both detected since `cursor.detected` only goes
+// true when the host process literally is Cursor — the user is presumably
+// using it as their primary agent.
+// Exported for testing.
+export function pickCtaAgents(
   status: AgentStatus,
   dismissed: boolean
-): Agent | null {
-  if (dismissed) return null;
-  if (status.claude.connected || status.cursor.connected) return null;
-  if (status.cursor.detected) return "cursor";
-  if (status.claude.detected) return "claude";
-  return null;
+): Agent[] {
+  if (dismissed) return [];
+  if (status.claude.connected || status.cursor.connected) return [];
+  const agents: Agent[] = [];
+  if (status.cursor.detected) agents.push("cursor");
+  if (status.claude.detected) agents.push("claude");
+  return agents;
 }
 
 export async function activate(
@@ -181,10 +186,18 @@ export async function activate(
         CONNECT_CTA_DISMISSED_KEY,
         false
       );
-      provider.postMessage({
-        kind: "connectCta",
-        agent: pickCtaAgent(status, dismissed),
-      });
+      const agents = pickCtaAgents(status, dismissed);
+      // Single line in Show logs makes "why isn't the CTA showing?" trivial
+      // to debug: status + dismissed + computed agents all on one row.
+      log(
+        "agentStatus",
+        JSON.stringify(status),
+        "ctaDismissed",
+        dismissed,
+        "ctaAgents",
+        JSON.stringify(agents)
+      );
+      provider.postMessage({ kind: "connectCta", agents });
     } catch (err) {
       logError("hooks: status read failed", err);
     }
@@ -486,18 +499,18 @@ export async function activate(
       }
       // Ordering is load-bearing here, do not reshuffle:
       //   1. Persist `connectCtaDismissed=true` so `postAgentStatus` below
-      //      recomputes the CTA target as null. Without this the webview
-      //      could see `connectCta:<agent>` re-asserted right after it
-      //      optimistically hid the CTA.
+      //      recomputes the CTA target as an empty array. Without this the
+      //      webview could see `connectCta` with non-empty agents re-asserted
+      //      right after it optimistically hid the CTA.
       //   2. `postAgentStatus` flushes both the new status AND the recomputed
-      //      `connectCta:null` to the webview.
+      //      `connectCta:{agents:[]}` to the webview.
       //   3. ONLY THEN post `cleanupTip`, so the toast (which preempts the
       //      CTA in the render slot) lands after the CTA has cleared. If we
       //      posted the tip first, the webview would render the toast while
-      //      the CTA was still its current state — but then connectCta:null
-      //      would arrive in the same render cycle and there'd be a one-
-      //      frame flicker. Keeping the order matches the FIFO postMessage
-      //      delivery contract.
+      //      the CTA was still its current state — but then the empty
+      //      `connectCta` would arrive in the same render cycle and there'd
+      //      be a one-frame flicker. Keeping the order matches the FIFO
+      //      postMessage delivery contract.
       // First-connect also retires the CTA permanently — the user has
       // discovered the feature, so a later disconnect shouldn't re-prompt.
       if (ok && msg.enabled) {

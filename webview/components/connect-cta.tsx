@@ -8,16 +8,18 @@ const AGENT_LABEL: Record<Agent, string> = {
 };
 
 interface Props {
-  agent: Agent;
-  onConnect: () => void;
+  agents: Agent[];
+  onConnect: (agent: Agent) => void;
   onDismiss: () => void;
 }
 
 export function ConnectCta({
-  agent,
+  agents,
   onConnect,
   onDismiss,
-}: Props): ReactElement {
+}: Props): ReactElement | null {
+  if (agents.length === 0) return null;
+
   return (
     <div
       role="region"
@@ -104,47 +106,67 @@ export function ConnectCta({
           paddingRight: "4px",
         }}
       >
-        Connect {AGENT_LABEL[agent]} so Standboy can expand this panel while
-        your agent is generating.
+        Connect your agent and Standboy will expand this panel while it's
+        generating.
       </p>
 
       <div
         style={{
           display: "flex",
-          justifyContent: "flex-end",
+          gap: "8px",
           marginTop: "10px",
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
         }}
       >
-        <button
-          type="button"
-          onClick={onConnect}
-          style={{
-            background: "var(--sb-c2)",
-            color: "var(--sb-c0)",
-            border: "none",
-            padding: "6px 14px",
-            borderRadius: "6px",
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-            boxShadow:
-              "0 1px 0 rgba(255,255,255,0.15) inset, 0 1px 2px rgba(0,0,0,0.2)",
-            transition: "transform 150ms ease-out, filter 150ms ease-out",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.filter = "brightness(1.08)";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.filter = "";
-            e.currentTarget.style.transform = "";
-          }}
-        >
-          Connect
-        </button>
+        {agents.map((agent) => (
+          <AgentButton
+            key={agent}
+            label={`Connect ${AGENT_LABEL[agent]}`}
+            onClick={() => onConnect(agent)}
+          />
+        ))}
       </div>
     </div>
+  );
+}
+
+function AgentButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: "var(--sb-c2)",
+        color: "var(--sb-c0)",
+        border: "none",
+        padding: "6px 12px",
+        borderRadius: "6px",
+        fontSize: "11px",
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        cursor: "pointer",
+        boxShadow:
+          "0 1px 0 rgba(255,255,255,0.15) inset, 0 1px 2px rgba(0,0,0,0.2)",
+        transition: "transform 150ms ease-out, filter 150ms ease-out",
+        whiteSpace: "nowrap",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.filter = "brightness(1.08)";
+        e.currentTarget.style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.filter = "";
+        e.currentTarget.style.transform = "";
+      }}
+    >
+      {label}
+    </button>
   );
 }

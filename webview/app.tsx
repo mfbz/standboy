@@ -736,11 +736,12 @@ export function App(): ReactElement {
   // Default true matches the host-side default — the value gets corrected
   // by the host's `autoShow` message after `ready` lands.
   const [autoShow, setAutoShow] = useState(true);
-  // Host-driven onboarding. `connectCtaAgent` is the agent the in-panel
-  // CTA promotes (null hides). `cleanupTipKey` is bumped each time the
-  // host sends `cleanupTip`, forcing a remount so the toast's animation
-  // restarts cleanly even if a previous instance hadn't yet finished.
-  const [connectCtaAgent, setConnectCtaAgent] = useState<Agent | null>(null);
+  // Host-driven onboarding. `connectCtaAgents` lists every detected, not-
+  // yet-connected agent — the CTA renders one button per entry. Empty array
+  // hides the CTA. `cleanupTipKey` is bumped each time the host sends
+  // `cleanupTip`, forcing a remount so the toast's animation restarts
+  // cleanly even if a previous instance hadn't yet finished.
+  const [connectCtaAgents, setConnectCtaAgents] = useState<Agent[]>([]);
   const [cleanupTipKey, setCleanupTipKey] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -788,7 +789,7 @@ export function App(): ReactElement {
           setAutoShow(msg.enabled);
           break;
         case "connectCta":
-          setConnectCtaAgent(msg.agent);
+          setConnectCtaAgents(msg.agents);
           break;
         case "cleanupTip":
           // Bump the key so a fresh mount restarts the auto-dismiss timer
@@ -1028,7 +1029,7 @@ export function App(): ReactElement {
 
       {(() => {
         // Toast wins over CTA. After a CTA-initiated connect the CTA also
-        // hides on its own (host posts connectCta:null before cleanupTip),
+        // hides on its own (host posts connectCta:[] before cleanupTip),
         // but checking explicitly avoids a one-frame race where both render.
         if (cleanupTipKey !== null) {
           return (
@@ -1040,20 +1041,17 @@ export function App(): ReactElement {
             </div>
           );
         }
-        if (connectCtaAgent === null) return null;
-        // Capture into a local so the onConnect closure doesn't depend on
-        // the live state slot (which we null-out optimistically below).
-        const agent: Agent = connectCtaAgent;
-        const other: Agent = agent === "claude" ? "cursor" : "claude";
+        if (connectCtaAgents.length === 0) return null;
         return (
           <div style={{ padding: "12px 14px 0" }}>
             <ConnectCta
-              agent={agent}
-              onConnect={() => {
+              agents={connectCtaAgents}
+              onConnect={(agent) => {
                 // Optimistic — host echoes the real connect state via
-                // agentStatus + connectCta(null) once setExclusiveAgent
+                // agentStatus + connectCta([]) once setExclusiveAgent
                 // resolves. Hide immediately to keep the click snappy.
-                setConnectCtaAgent(null);
+                const other: Agent = agent === "claude" ? "cursor" : "claude";
+                setConnectCtaAgents([]);
                 setAgentStatus((prev) => ({
                   ...prev,
                   [agent]: { ...prev[agent], connected: true },
@@ -1062,7 +1060,7 @@ export function App(): ReactElement {
                 send({ kind: "setAgent", agent, enabled: true });
               }}
               onDismiss={() => {
-                setConnectCtaAgent(null);
+                setConnectCtaAgents([]);
                 send({ kind: "dismissConnectCta" });
               }}
             />

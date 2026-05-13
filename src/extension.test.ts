@@ -10,7 +10,7 @@ vi.mock("vscode", () => ({
   },
 }));
 
-import { pickCtaAgent } from "./extension";
+import { pickCtaAgents } from "./extension";
 
 function status(
   claude: { detected: boolean; connected: boolean },
@@ -19,85 +19,100 @@ function status(
   return { claude, cursor };
 }
 
-describe("pickCtaAgent", () => {
-  it("returns null when the user has dismissed the CTA, regardless of detection", () => {
+describe("pickCtaAgents", () => {
+  it("returns [] when the user has dismissed the CTA, regardless of detection", () => {
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: true, connected: false },
           { detected: true, connected: false }
         ),
         true
       )
-    ).toBeNull();
+    ).toEqual([]);
   });
 
-  it("returns null when either agent is already connected", () => {
+  it("returns [] when either agent is already connected", () => {
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: true, connected: true },
           { detected: false, connected: false }
         ),
         false
       )
-    ).toBeNull();
+    ).toEqual([]);
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: false, connected: false },
           { detected: true, connected: true }
         ),
         false
       )
-    ).toBeNull();
+    ).toEqual([]);
   });
 
-  it("prefers Cursor when both Cursor and Claude Code are detected", () => {
+  it("offers BOTH when both Cursor and Claude Code are detected and unconnected, with Cursor first", () => {
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: true, connected: false },
           { detected: true, connected: false }
         ),
         false
       )
-    ).toBe("cursor");
+    ).toEqual(["cursor", "claude"]);
   });
 
-  it("returns 'claude' when only Claude Code is detected", () => {
+  it("returns ['claude'] when only Claude Code is detected", () => {
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: true, connected: false },
           { detected: false, connected: false }
         ),
         false
       )
-    ).toBe("claude");
+    ).toEqual(["claude"]);
   });
 
-  it("returns 'cursor' when only Cursor is detected", () => {
+  it("returns ['cursor'] when only Cursor is detected", () => {
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: false, connected: false },
           { detected: true, connected: false }
         ),
         false
       )
-    ).toBe("cursor");
+    ).toEqual(["cursor"]);
   });
 
-  it("returns null when no agent is detected", () => {
+  it("returns [] when no agent is detected", () => {
     expect(
-      pickCtaAgent(
+      pickCtaAgents(
         status(
           { detected: false, connected: false },
           { detected: false, connected: false }
         ),
         false
       )
-    ).toBeNull();
+    ).toEqual([]);
+  });
+
+  it("returns [] when the lone connected agent toggles back off but dismissed sticks", () => {
+    // Documents the load-bearing UX choice: once you've connected, the CTA
+    // never re-pops even if you later disconnect — the dismissed flag was
+    // flipped on first connect specifically to prevent that.
+    expect(
+      pickCtaAgents(
+        status(
+          { detected: true, connected: false },
+          { detected: true, connected: false }
+        ),
+        true
+      )
+    ).toEqual([]);
   });
 });

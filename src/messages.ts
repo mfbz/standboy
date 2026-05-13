@@ -81,15 +81,16 @@ export type HostToWebview =
   | { kind: "bindings"; bindings: KeyBindings }
   | { kind: "agentStatus"; status: AgentStatus }
   | { kind: "autoShow"; enabled: boolean }
-  // In-panel onboarding CTA. `agent` names which agent to promote (we
-  // suggest the most likely one — Cursor when running inside Cursor, else
-  // Claude Code). `null` hides the CTA. Mutually exclusive with `cleanupTip`
+  // In-panel onboarding CTA. `agents` lists every detected, not-yet-connected
+  // agent so the user picks which one to wire up — running inside Cursor
+  // with Claude Code also installed is a real combo and the choice is
+  // theirs. Empty array hides the CTA. Mutually exclusive with `cleanupTip`
   // in the webview render slot — the toast preempts the CTA.
-  | { kind: "connectCta"; agent: Agent | null }
+  | { kind: "connectCta"; agents: Agent[] }
   // One-shot info nudge shown the first time the user connects an agent —
   // surfaces the "disconnect before uninstalling" convention at the moment
-  // it becomes meaningful. Always paired with a preceding `connectCta:null`
-  // so the CTA clears before the toast renders.
+  // it becomes meaningful. Always paired with a preceding `connectCta` with
+  // an empty `agents` so the CTA clears before the toast renders.
   | { kind: "cleanupTip" }
   // Hard reload — the only reliable way to swap the running ROM, since
   // EmulatorJS has no clean teardown.
