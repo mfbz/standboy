@@ -12,7 +12,9 @@
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-e2f3e4?labelColor=332c50" /></a>
 </p>
 
----
+<p align="center">
+  <img src="media/preview.gif" alt="Standboy auto-expanding when an agent starts working, and tucking back down when it finishes" width="800" />
+</p>
 
 When your AI coding agent starts generating, Standboy auto-expands a sidebar Game Boy emulator. When the agent finishes, Standboy tucks back down and the emulator pauses. He resumes mid-frame the next time your agent wakes him up.
 
