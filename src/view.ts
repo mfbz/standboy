@@ -17,7 +17,9 @@ export class StandboyViewProvider implements vscode.WebviewViewProvider {
 
   private view: vscode.WebviewView | undefined;
   private messageListener: vscode.Disposable | undefined;
+  private visibilityListener: vscode.Disposable | undefined;
   private onMessage: WebviewMessageHandler | undefined;
+  private onBecomeVisible: (() => void) | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -26,6 +28,13 @@ export class StandboyViewProvider implements vscode.WebviewViewProvider {
 
   setMessageHandler(handler: WebviewMessageHandler | undefined): void {
     this.onMessage = handler;
+  }
+
+  // Fires when the view transitions from hidden to visible. Used as a
+  // recovery hook for any sentinel-watcher event the OS may have dropped
+  // since the panel was last open — event-driven, no polling.
+  setOnBecomeVisible(callback: (() => void) | undefined): void {
+    this.onBecomeVisible = callback;
   }
 
   // True only when the Standboy view container is the active item in the
@@ -90,6 +99,18 @@ export class StandboyViewProvider implements vscode.WebviewViewProvider {
         await this.onMessage?.(msg);
       }
     );
+
+    this.visibilityListener?.dispose();
+    this.visibilityListener = view.onDidChangeVisibility(() => {
+      if (view.visible) this.onBecomeVisible?.();
+    });
+    // onDidChangeVisibility only fires on *transitions*. If the view was
+    // already visible at resolve time (user had Standboy as their active
+    // sidebar tab when the extension activated, or the view container was
+    // re-resolved after a layout change), the callback would otherwise
+    // never fire for the initial state. Fire it once explicitly so the
+    // recovery hook is honored on first-open.
+    if (view.visible) this.onBecomeVisible?.();
   }
 
   postMessage(message: unknown): void {
@@ -114,6 +135,8 @@ export class StandboyViewProvider implements vscode.WebviewViewProvider {
   dispose(): void {
     this.messageListener?.dispose();
     this.messageListener = undefined;
+    this.visibilityListener?.dispose();
+    this.visibilityListener = undefined;
   }
 
   private getHtml(webview: vscode.Webview): string {

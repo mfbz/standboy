@@ -21,7 +21,12 @@ import {
   ensureMarkerInstalled,
   watchSentinel,
 } from "./agent";
-import { getAgentStatus, setExclusiveAgent } from "./hooks";
+import {
+  getAgentStatus,
+  setClaudeHooks,
+  setCursorHooks,
+  setExclusiveAgent,
+} from "./hooks";
 import type {
   Agent,
   AgentStatus,
@@ -101,13 +106,48 @@ export async function activate(
     logError("agent: activation prep failed", err);
   }
 
-  // While ~/.standboy/agent-active exists, the override flag pins activity
-  // state to "active" and bypasses the burst heuristic — official lifecycle
-  // signal beats edit-pattern guessing every time.
-  const sentinelWatcher = watchSentinel((active) => {
-    log("agent: sentinel", active ? "present" : "absent");
-    detector.setOverride(active);
+  // Migrate hook configs from older builds (single `start` command for
+  // both prompt and tool events) to the new prompt/tool split. Install
+  // is idempotent and wipes-then-rewrites our entries, so calling it on
+  // an already-current config is a no-op effect. Skips work for any
+  // agent that was never connected.
+  try {
+    const status = await getAgentStatus();
+    if (status.claude.connected) await setClaudeHooks(true);
+    if (status.cursor.connected) await setCursorHooks(true);
+  } catch (err) {
+    logError("agent: hook migration failed", err);
+  }
+
+  // While ~/.standboy/agent-active exists with a fresh timestamp, the
+  // override flag pins activity state to "active" and bypasses the burst
+  // heuristic — official lifecycle signal beats edit-pattern guessing
+  // every time. A stale timestamp is treated as absent (catches user
+  // interrupts, which don't fire the agent's Stop hook).
+  //
+  // onPromptPing fires when a new user prompt lands during an existing
+  // active run — re-shows a panel the user had manually closed. Tool
+  // refreshes deliberately don't fire it, so the user can keep the
+  // panel closed mid-run if they want.
+  const sentinelWatcher = watchSentinel({
+    onChange: (active) => {
+      log("agent: sentinel", active ? "present" : "absent");
+      detector.setOverride(active);
+    },
+    onPromptPing: () => {
+      if (!readAutoShow()) return;
+      if (provider.isVisible()) return;
+      log("agent: prompt ping (re-showing panel)");
+      void vscode.commands.executeCommand("standboy.gameView.focus");
+    },
   });
+
+  // Recovery hook for the only real failure mode of an event-only watcher:
+  // fs.watch on macOS can drop events under heavy I/O load. When the user
+  // opens the Standboy panel themselves, we recheck the sentinel — picks
+  // up any transition we may have missed. Event-driven (user action), no
+  // periodic polling.
+  provider.setOnBecomeVisible(() => sentinelWatcher.recheck());
 
   let currentRomHash: string | null = null;
 
